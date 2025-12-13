@@ -1,0 +1,30 @@
+[package]
+name = "matcha"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+crossterm = { version = "0.27", features = ["event-stream"] }
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1.57"
+anyhow = "1.0"
+unicode-segmentation = "1.9.0"
+unicode-width = "0.1.5"
+regex = "1.10.2"
+futures = "0.3.30"
+crokey = "0.6.3"
+serde = { version = "1.0.130", features = ["derive"] }
+serde_json = { version = "1" }
+toml = "0.5"
+tracing = { version = "0.1", optional = true }
+itertools = "0.10.1"
+
+
+[dev-dependencies]
+chagashi = { version = "*", path = "../chagashi" }
+
+[features]
+default = []
+tracing = ["dep:tracing"]
