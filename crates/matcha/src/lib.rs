@@ -1,3 +1,4 @@
+mod dyn_model;
 mod extension;
 mod formatter;
 mod key;
@@ -5,6 +6,7 @@ mod messages;
 mod termable;
 mod terminal;
 
+pub use dyn_model::{boxed, DynModel};
 pub use extension::*;
 pub use formatter::*;
 pub use key::*;

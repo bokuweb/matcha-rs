@@ -2,7 +2,7 @@ use std::fmt::Display;
 
 use matcha::{batch, fill_by_space, Cmd, InitInput, Model, Msg, ResizeEvent};
 
-use crate::dyn_model::DynModel;
+use matcha::DynModel;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FlexDirection {
@@ -283,7 +283,7 @@ impl Model for Flex {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::dyn_model::boxed;
+    use matcha::boxed;
 
     #[derive(Clone)]
     struct Static(&'static str);

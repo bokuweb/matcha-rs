@@ -1,4 +1,4 @@
-use matcha::{Cmd, InitInput, Model, Msg};
+use crate::{Cmd, InitInput, Model, Msg};
 
 /// `matcha::Model` is not object-safe because it is `Sized` and returns `impl Display`.
 /// This provides an object-safe wrapper so container components (e.g. `Flex`) can hold

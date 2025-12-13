@@ -1,6 +1,7 @@
 use std::fmt::Display;
 
-use chagashi::{boxed, Flex};
+use chagashi::Flex;
+use matcha::boxed;
 use matcha::{key, Cmd, Extensions, Key, KeyEvent, Model, Msg, Program};
 
 #[derive(Clone)]
