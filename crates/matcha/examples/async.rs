@@ -1,6 +1,5 @@
 use std::fmt::Display;
 
-use futures::FutureExt;
 use matcha::{
     quit, style, AsyncCmd, Cmd, Extensions, InitInput, KeyEvent, Model, Msg, Program, Stylize,
 };
@@ -21,6 +20,7 @@ struct App {
     done: bool,
 }
 
+#[async_trait::async_trait]
 impl Model for App {
     fn init(self, _input: &InitInput) -> (Self, Option<Cmd>) {
         (self, Some(matcha::r#async!(init())))
@@ -46,22 +46,13 @@ impl Model for App {
         }
     }
 
-    fn execute<'async_trait>(
-        _ext: Extensions,
-        AsyncCmd(cmd): AsyncCmd,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Option<Cmd>> + Send + 'async_trait>>
-    where
-        Self: 'async_trait,
-    {
-        async move {
-            let msg = cmd();
-            if msg.downcast_ref::<AsyncMsg>().is_some() {
-                tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-                return Some(matcha::sync!(done()));
-            }
-            None
+    async fn execute(_ext: Extensions, AsyncCmd(cmd): AsyncCmd) -> Option<Cmd> {
+        let msg = cmd();
+        if msg.downcast_ref::<AsyncMsg>().is_some() {
+            tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+            return Some(matcha::sync!(done()));
         }
-        .boxed()
+        None
     }
 }
 

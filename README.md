@@ -64,6 +64,7 @@ Reusable UI components that can be composed as `matcha::Model`s:
 - **`list`**: list UI (customizable rendering via a delegate)
 - **`spinner`**: animated spinner (via ticking)
 - **`border` / `borderize`**: borders / framing
+- **`flex`**: a flexbox-inspired layout container (row/column, wrapping)
 
 ---
 
@@ -79,6 +80,7 @@ cargo run -p matcha --example textinput
 
 ```bash
 cargo run -p matcha --example async
+cargo run -p matcha --example flex
 cargo run -p matcha --example hello
 cargo run -p matcha --example simple
 cargo run -p matcha --example textarea
@@ -93,7 +95,6 @@ Async command example. The program starts an async task on init, waits 3 seconds
 ```rust
 use std::fmt::Display;
 
-use futures::FutureExt;
 use matcha::{
     quit, style, AsyncCmd, Cmd, Extensions, InitInput, KeyEvent, Model, Msg, Program, Stylize,
 };
@@ -113,6 +114,7 @@ struct App {
     done: bool,
 }
 
+#[async_trait::async_trait]
 impl Model for App {
     fn init(self, _input: &InitInput) -> (Self, Option<Cmd>) {
         (self, Some(matcha::r#async!(init())))
@@ -138,22 +140,13 @@ impl Model for App {
         }
     }
 
-    fn execute<'async_trait>(
-        _ext: Extensions,
-        AsyncCmd(cmd): AsyncCmd,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Option<Cmd>> + Send + 'async_trait>>
-    where
-        Self: 'async_trait,
-    {
-        async move {
-            let msg = cmd();
-            if msg.downcast_ref::<AsyncMsg>().is_some() {
-                tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-                return Some(matcha::sync!(done()));
-            }
-            None
+    async fn execute(_ext: Extensions, AsyncCmd(cmd): AsyncCmd) -> Option<Cmd> {
+        let msg = cmd();
+        if msg.downcast_ref::<AsyncMsg>().is_some() {
+            tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+            return Some(matcha::sync!(done()));
         }
-        .boxed()
+        None
     }
 }
 
@@ -163,6 +156,14 @@ async fn main() -> Result<(), ()> {
     p.start().await.unwrap();
     Ok(())
 }
+```
+
+### Example: `flex`
+
+Flex layout example (from `chagashi::Flex`). This example runs in alt-screen mode for stable redraw during resize.
+
+```bash
+cargo run -p matcha --example flex
 ```
 
 ### Example: `textinput`

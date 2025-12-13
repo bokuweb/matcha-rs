@@ -11,6 +11,7 @@ pub trait Termable {
     fn disable_mouse_capture(&self) -> Result<(), std::io::Error>;
     fn move_to_column(&self, y: u16) -> Result<(), std::io::Error>;
     fn move_to(&self, x: u16, y: u16) -> Result<(), std::io::Error>;
+    fn cursor_position(&self) -> Result<(u16, u16), std::io::Error>;
     fn clear_all(&self) -> Result<(), std::io::Error>;
     fn clear_current_line(&self) -> Result<(), std::io::Error>;
     fn clear_current_line_and_move_previous(&self) -> Result<(), std::io::Error>;

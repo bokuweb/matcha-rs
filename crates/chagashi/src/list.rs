@@ -6,7 +6,7 @@ use matcha::KeyCode;
 use matcha::KeyEvent;
 use matcha::{style, Cmd, Color as MatchaColor, InitInput, Model as MModel, Msg, Stylize};
 
-// Matchaと同じイベント型を用意（私たちのクレートで使いやすいように）
+// Define a matcha-compatible event type for easier use within this crate.
 #[derive(Debug)]
 pub enum Event {
     Key(KeyEvent),
@@ -45,7 +45,7 @@ pub trait ItemDelegate: Send + Sync {
     fn update(&self, event: Event, model: &mut Model) -> Option<Event>;
 }
 
-/// モックのトレイト実装（スタイライズ用）
+/// A small helper type to make styling ergonomics easier in this crate.
 pub struct StylizeWrapper {
     pub content: String,
     pub fg_color: Option<MatchaColor>,

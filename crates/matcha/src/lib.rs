@@ -156,7 +156,7 @@ pub struct Program<M> {
     alt_screen: bool,
     /// terminal
     term: Box<dyn Termable>,
-    /// If true, we saved the initial cursor position as the redraw anchor (non-alt-screen).
+    /// Fallback redraw anchor using Save/Restore cursor position (some terminals can't report cursor position).
     redraw_anchor_saved: bool,
 }
 
@@ -227,6 +227,14 @@ impl<M: Model> Program<M> {
             term,
             redraw_anchor_saved: false,
         }
+    }
+
+    /// Enable alternate screen buffer from the start.
+    ///
+    /// This is the recommended mode for full-screen TUIs, and makes resize redraw far more stable.
+    pub fn with_alt_screen(mut self) -> Self {
+        self.alt_screen = true;
+        self
     }
 
     pub async fn start(self) -> anyhow::Result<()> {
@@ -337,14 +345,21 @@ impl<M: Model> Program<M> {
         // initial rendering
         self.term.hide_cursor()?;
         self.term.enable_raw_mode()?;
-        // In non-alt-screen mode, anchor redraws to the initial cursor position so we don't
-        // erase scrollback/history above.
+        if self.alt_screen {
+            self.term.enter_alt_screen()?;
+            self.term.clear_all()?;
+        }
+        // In normal screen mode, keep the scrollback intact by anchoring redraws to the cursor
+        // position at startup, and only clearing below that anchor on each redraw.
         if !self.alt_screen {
-            self.term.save_cursor_position()?;
+            let _ = self.term.save_cursor_position();
             self.redraw_anchor_saved = true;
         }
-        let mut prev_view = formatter::format(self.model.view(), self.size);
-        self.term.print(&prev_view)?;
+
+        // Render using full terminal size. We keep the scrollback intact by restoring the anchor
+        // and clearing from cursor down before each redraw (see main loop).
+        let initial_view = formatter::format(self.model.view(), self.size);
+        self.term.print(&initial_view)?;
 
         // main loop
         let mut rx = msg_rx;
@@ -399,30 +414,20 @@ impl<M: Model> Program<M> {
             if self.alt_screen {
                 self.term.clear_all()?;
             } else {
-                // If resized, the terminal may reflow previously printed lines (wrapping changes),
-                // so clearing by previous logical line count can leave artifacts. To avoid
-                // duplicates while preserving scrollback, restore the initial cursor anchor and
-                // clear only the area below it.
-                if msg.is::<ResizeEvent>() && self.redraw_anchor_saved {
-                    self.term.restore_cursor_position()?;
-                    self.term.clear_from_cursor_down()?;
-                    self.term.print(&current_view)?;
-                    prev_view = current_view;
-                    continue;
-                }
-                self.term.move_to_column(0)?;
-                if prev_view.matches("\r\n").count() == 0 {
-                    self.term.clear_current_line()?;
+                // Normal screen: restore the anchor (start of app region) and clear only below it.
+                // Some terminals may lose the saved position on resize; refresh it each frame by
+                // saving again immediately after restoring.
+                if self.redraw_anchor_saved {
+                    let _ = self.term.restore_cursor_position();
+                    let _ = self.term.move_to_column(0);
+                    let _ = self.term.save_cursor_position();
                 } else {
-                    self.term.clear_current_line()?;
-                    for _ in 0..prev_view.matches("\r\n").count() {
-                        self.term.clear_current_line_and_move_previous()?;
-                    }
+                    let _ = self.term.move_to_column(0);
                 }
+                self.term.clear_from_cursor_down()?;
             }
 
             self.term.print(&current_view)?;
-            prev_view = current_view;
         }
 
         #[cfg(feature = "tracing")]

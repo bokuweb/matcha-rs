@@ -59,6 +59,10 @@ impl crate::termable::Termable for DefaultTerminal {
         execute!(std::io::stdout(), MoveTo(x, y),)
     }
 
+    fn cursor_position(&self) -> Result<(u16, u16), std::io::Error> {
+        crossterm::cursor::position()
+    }
+
     fn clear_all(&self) -> Result<(), std::io::Error> {
         execute!(
             std::io::stdout(),
