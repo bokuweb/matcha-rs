@@ -78,4 +78,16 @@ impl crate::termable::Termable for DefaultTerminal {
             Clear(ClearType::CurrentLine)
         )
     }
+
+    fn save_cursor_position(&self) -> Result<(), std::io::Error> {
+        execute!(std::io::stdout(), cursor::SavePosition)
+    }
+
+    fn restore_cursor_position(&self) -> Result<(), std::io::Error> {
+        execute!(std::io::stdout(), cursor::RestorePosition)
+    }
+
+    fn clear_from_cursor_down(&self) -> Result<(), std::io::Error> {
+        execute!(std::io::stdout(), Clear(ClearType::FromCursorDown))
+    }
 }

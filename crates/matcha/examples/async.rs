@@ -1,9 +1,9 @@
 use std::fmt::Display;
 
+use futures::FutureExt;
 use matcha::{
     quit, style, AsyncCmd, Cmd, Extensions, InitInput, KeyEvent, Model, Msg, Program, Stylize,
 };
-use futures::FutureExt;
 
 pub fn init() -> Msg {
     Box::new(AsyncMsg) as Msg
@@ -49,9 +49,7 @@ impl Model for App {
     fn execute<'async_trait>(
         _ext: Extensions,
         AsyncCmd(cmd): AsyncCmd,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Option<Cmd>> + Send + 'async_trait>,
-    >
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Option<Cmd>> + Send + 'async_trait>>
     where
         Self: 'async_trait,
     {

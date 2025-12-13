@@ -14,4 +14,10 @@ pub trait Termable {
     fn clear_all(&self) -> Result<(), std::io::Error>;
     fn clear_current_line(&self) -> Result<(), std::io::Error>;
     fn clear_current_line_and_move_previous(&self) -> Result<(), std::io::Error>;
+    /// Save current cursor position (for non-alt-screen redraw anchoring).
+    fn save_cursor_position(&self) -> Result<(), std::io::Error>;
+    /// Restore previously saved cursor position.
+    fn restore_cursor_position(&self) -> Result<(), std::io::Error>;
+    /// Clear from current cursor position down to the end of the screen.
+    fn clear_from_cursor_down(&self) -> Result<(), std::io::Error>;
 }

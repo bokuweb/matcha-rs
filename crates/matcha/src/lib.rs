@@ -156,6 +156,8 @@ pub struct Program<M> {
     alt_screen: bool,
     /// terminal
     term: Box<dyn Termable>,
+    /// If true, we saved the initial cursor position as the redraw anchor (non-alt-screen).
+    redraw_anchor_saved: bool,
 }
 
 /// batchMsg is the internal message used to perform a bunch of commands. You
@@ -211,6 +213,7 @@ impl<M: Model> Program<M> {
             size: (w, h),
             alt_screen: false,
             term: Box::new(term),
+            redraw_anchor_saved: false,
         }
     }
 
@@ -222,6 +225,7 @@ impl<M: Model> Program<M> {
             size: (w, h),
             alt_screen: false,
             term,
+            redraw_anchor_saved: false,
         }
     }
 
@@ -333,6 +337,12 @@ impl<M: Model> Program<M> {
         // initial rendering
         self.term.hide_cursor()?;
         self.term.enable_raw_mode()?;
+        // In non-alt-screen mode, anchor redraws to the initial cursor position so we don't
+        // erase scrollback/history above.
+        if !self.alt_screen {
+            self.term.save_cursor_position()?;
+            self.redraw_anchor_saved = true;
+        }
         let mut prev_view = formatter::format(self.model.view(), self.size);
         self.term.print(&prev_view)?;
 
@@ -389,6 +399,17 @@ impl<M: Model> Program<M> {
             if self.alt_screen {
                 self.term.clear_all()?;
             } else {
+                // If resized, the terminal may reflow previously printed lines (wrapping changes),
+                // so clearing by previous logical line count can leave artifacts. To avoid
+                // duplicates while preserving scrollback, restore the initial cursor anchor and
+                // clear only the area below it.
+                if msg.is::<ResizeEvent>() && self.redraw_anchor_saved {
+                    self.term.restore_cursor_position()?;
+                    self.term.clear_from_cursor_down()?;
+                    self.term.print(&current_view)?;
+                    prev_view = current_view;
+                    continue;
+                }
                 self.term.move_to_column(0)?;
                 if prev_view.matches("\r\n").count() == 0 {
                     self.term.clear_current_line()?;
