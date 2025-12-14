@@ -5,12 +5,16 @@ use matcha::{batch, fill_by_space, Cmd, InitInput, Model, Msg, ResizeEvent};
 use matcha::DynModel;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Layout direction for [`Flex`].
 pub enum FlexDirection {
+    /// Arrange children horizontally.
     Row,
+    /// Arrange children vertically.
     Column,
 }
 
 #[derive(Debug, Clone)]
+/// Configuration for [`Flex`].
 pub struct FlexOption {
     /// Minimum width per item. If the available width cannot satisfy this, the number of columns
     /// is reduced and items will wrap to the next row.
@@ -49,6 +53,7 @@ pub struct Flex {
 }
 
 impl Flex {
+    /// Create a new `Flex` container with the given children.
     pub fn new(children: Vec<Box<dyn DynModel>>) -> Self {
         Self {
             width: 0,
@@ -57,10 +62,12 @@ impl Flex {
         }
     }
 
+    /// Replace all options at once.
     pub fn options(self, opt: FlexOption) -> Self {
         Self { opt, ..self }
     }
 
+    /// Set the gap (in cells) between children.
     pub fn gap(self, gap: u16) -> Self {
         Self {
             opt: FlexOption { gap, ..self.opt },
@@ -68,6 +75,7 @@ impl Flex {
         }
     }
 
+    /// Set the minimum width for each child in row layout.
     pub fn min_item_width(self, w: u16) -> Self {
         Self {
             opt: FlexOption {
@@ -78,6 +86,7 @@ impl Flex {
         }
     }
 
+    /// Enable/disable wrapping in row layout.
     pub fn wrap(self, wrap: bool) -> Self {
         Self {
             opt: FlexOption { wrap, ..self.opt },
@@ -85,6 +94,7 @@ impl Flex {
         }
     }
 
+    /// Set the maximum number of columns for row layout.
     pub fn columns(self, columns: u16) -> Self {
         Self {
             opt: FlexOption {
@@ -95,6 +105,7 @@ impl Flex {
         }
     }
 
+    /// Set the layout direction.
     pub fn direction(self, direction: FlexDirection) -> Self {
         Self {
             opt: FlexOption {

@@ -18,7 +18,7 @@
    
 This repository is a Cargo workspace composed of two crates:
 
-- **`matcha`**: the core runtime (event loop, input handling, command execution, rendering)
+- **`matcha-rs`**: the core runtime (event loop, input handling, command execution, rendering)
 - **`chagashi`**: UI components built on top of `matcha`
 
 Name origin:
@@ -43,7 +43,7 @@ Name origin:
 
 ## crates
 
-### `matcha` (core)
+### `matcha-rs` (core package, `matcha` crate)
 
 Key features:
 
@@ -226,7 +226,7 @@ Since this is a Cargo workspace, you can depend on `matcha` / `chagashi` individ
 
 ```toml
 [dependencies]
-matcha = { git = "https://github.com/bokuweb/matcha-rs", package = "matcha" }
+matcha = { git = "https://github.com/bokuweb/matcha-rs", package = "matcha-rs" }
 chagashi = { git = "https://github.com/bokuweb/matcha-rs", package = "chagashi" }
 ```
 

@@ -4,8 +4,11 @@ use crate::{Cmd, InitInput, Model, Msg};
 /// This provides an object-safe wrapper so container components (e.g. `Flex`) can hold
 /// heterogeneous `Model` implementations.
 pub trait DynModel {
+    /// Initialize the boxed model.
     fn init_box(self: Box<Self>, input: &InitInput) -> (Box<dyn DynModel>, Option<Cmd>);
+    /// Update the boxed model with a message.
     fn update_box(self: Box<Self>, msg: &Msg) -> (Box<dyn DynModel>, Option<Cmd>);
+    /// Render the boxed model as a `String`.
     fn view_string(&self) -> String;
 }
 

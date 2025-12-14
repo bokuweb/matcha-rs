@@ -2,6 +2,7 @@ use std::cmp;
 use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Default, Debug)]
+/// A single line of text stored as graphemes.
 pub struct Row {
     string: String,
     len: usize,
@@ -18,6 +19,7 @@ impl From<&str> for Row {
 
 impl Row {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Render a slice of the row from grapheme index `start` to `end`.
     pub fn render(&self, start: usize, end: usize) -> String {
         let end = cmp::min(end, self.string.len());
         let start = cmp::min(start, end);
@@ -39,11 +41,13 @@ impl Row {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Return the grapheme length of the row.
     pub fn len(&self) -> usize {
         self.len
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Insert a character at grapheme index `at`.
     pub fn insert(&mut self, at: usize, c: char) {
         if at >= self.len() {
             self.string.push(c);
@@ -65,6 +69,7 @@ impl Row {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Delete the grapheme at index `at`.
     pub fn delete(&mut self, at: usize) {
         if at >= self.len() {
             return;
@@ -87,12 +92,14 @@ impl Row {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Append `new` to the end of this row.
     pub fn append(&mut self, new: &Self) {
         self.string = format!("{}{}", self.string, new.string);
         self.len += new.len;
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Split the row at grapheme index `at` and return the tail part.
     pub fn split(&mut self, at: usize) -> Self {
         let mut row: String = String::new();
         let mut length = 0;
@@ -121,6 +128,7 @@ impl Row {
     // }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Borrow the underlying string.
     pub fn as_str(&self) -> &str {
         self.string.as_str()
     }

@@ -5,21 +5,34 @@ use unicode_width::UnicodeWidthStr;
 use crate::border::Border;
 
 #[derive(Debug, Default)]
+/// Options for an individual border side.
 pub struct BorderOption {
+    /// Whether to render this border side.
     pub show: bool,
+    /// Optional color applied to the border glyphs.
     pub color: Option<Color>,
 }
 
+/// Render a child model with optional borders around it.
+///
+/// This widget is useful for composing "window" style components in TUIs.
 pub struct Borderize<M> {
+    /// Top border option.
     pub top: BorderOption,
+    /// Right border option.
     pub right: BorderOption,
+    /// Bottom border option.
     pub bottom: BorderOption,
+    /// Left border option.
     pub left: BorderOption,
+    /// Fixed inner width. If `None`, width is derived from child content.
     pub width: Option<u16>,
+    /// Inner child model.
     pub child: M,
 }
 
 impl<M: Model> Borderize<M> {
+    /// Create a new `Borderize` wrapper around `child`.
     pub fn new(child: M) -> Self {
         Self {
             top: BorderOption::default(),
@@ -31,6 +44,7 @@ impl<M: Model> Borderize<M> {
         }
     }
 
+    /// Set a fixed width for the bordered area.
     pub fn width(self, w: u16) -> Self {
         Self {
             width: Some(w),
@@ -38,18 +52,22 @@ impl<M: Model> Borderize<M> {
         }
     }
 
+    /// Configure the top border.
     pub fn top(self, b: BorderOption) -> Self {
         Self { top: b, ..self }
     }
 
+    /// Configure the right border.
     pub fn right(self, b: BorderOption) -> Self {
         Self { right: b, ..self }
     }
 
+    /// Configure the bottom border.
     pub fn bottom(self, b: BorderOption) -> Self {
         Self { bottom: b, ..self }
     }
 
+    /// Configure the left border.
     pub fn left(self, b: BorderOption) -> Self {
         Self { left: b, ..self }
     }

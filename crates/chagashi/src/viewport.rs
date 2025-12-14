@@ -5,40 +5,55 @@ use matcha::*;
 /// KeyMap defines the keybindings for the viewport.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ViewportKeys {
+    /// Page down.
     PageDown,
+    /// Page up.
     PageUp,
+    /// Down one line.
     Down,
+    /// Up one line.
     Up,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Default keybinding set for [`Viewport`].
 pub struct Keybindings(matcha::KeyBindings<ViewportKeys>);
 
+/// Emit a message that indicates an item/line has been selected.
+///
+/// This is typically sent by the viewport when selection mode is enabled.
 pub fn selected(index: u16) -> Msg {
     Box::new(ViewportOnSelectMsg { index })
 }
 
 #[derive(Debug)]
+/// Message emitted when the selection changes.
 pub struct ViewportOnSelectMsg {
+    /// Selected index (0-based).
     pub index: u16,
 }
 
 impl ViewportOnSelectMsg {
+    /// Create a new `ViewportOnSelectMsg`.
     pub fn new(index: u16) -> Self {
         Self { index }
     }
 }
 
+/// Request selecting the given index.
 pub fn select(index: u16) -> Msg {
     Box::new(ViewportSelectMsg { index })
 }
 
 #[derive(Debug)]
+/// Message requesting the viewport to select an index.
 pub struct ViewportSelectMsg {
+    /// Index to select (0-based).
     pub index: u16,
 }
 
 impl ViewportSelectMsg {
+    /// Create a new `ViewportSelectMsg`.
     pub fn new(index: u16) -> Self {
         Self { index }
     }
@@ -61,6 +76,9 @@ impl Default for Keybindings {
 }
 
 /// the matcha model for this viewport element.
+///
+/// `Viewport` renders a child model and provides vertical scrolling. It can optionally
+/// run in selection mode to highlight a line and emit selection messages.
 pub struct Viewport<M> {
     width: u16,
     height: u16,
@@ -77,6 +95,7 @@ pub struct Viewport<M> {
 }
 
 #[derive(Debug)]
+/// Configuration for [`Viewport`].
 pub struct ViewportOption {
     /// enable wrap mode.
     pub wrap: bool,
@@ -101,6 +120,7 @@ impl Default for ViewportOption {
 
 impl<M: Model> Viewport<M> {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Create a new viewport around `child` with a fixed `(width, height)` and options.
     pub fn new(child: M, size: (u16, u16), opt: ViewportOption) -> Self {
         Self {
             width: size.0,
@@ -118,6 +138,7 @@ impl<M: Model> Viewport<M> {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Update the viewport size.
     pub fn update_size(self, size: (u16, u16)) -> Self {
         Self {
             width: size.0,
@@ -134,6 +155,8 @@ impl<M: Model> Viewport<M> {
 
     /// sets the viewport to the top position.
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    ///
+    /// This resets the vertical scroll offset.
     pub fn move_to_top(self) -> Self {
         Self {
             offset_y: 0,
@@ -142,6 +165,7 @@ impl<M: Model> Viewport<M> {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Scroll up by one line (or move selection up in selection mode).
     pub fn move_up(self) -> Self {
         if self.selection {
             if self.selection_y <= self.offset_y {
@@ -169,6 +193,7 @@ impl<M: Model> Viewport<M> {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Scroll down by one line (or move selection down in selection mode).
     pub fn move_down(self) -> Self {
         if self.selection {
             if self.selection_y >= (self.offset_y + self.height).saturating_sub(1) {
@@ -203,6 +228,7 @@ impl<M: Model> Viewport<M> {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Scroll up by one page.
     pub fn page_up(self) -> Self {
         let y = self.offset_y.saturating_sub(self.height);
         Self {
@@ -213,6 +239,7 @@ impl<M: Model> Viewport<M> {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Scroll down by one page.
     pub fn page_down(self) -> Self {
         if self.offset_y + self.height >= self.content_len().saturating_sub(1) {
             return self;
@@ -322,6 +349,8 @@ impl<M: Model> Viewport<M> {
 
     /// sets the viewport to the bottom position.
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    ///
+    /// This sets the vertical scroll offset to the maximum.
     pub fn move_to_bottom(self) -> Self {
         Self {
             offset_y: self.max_y_offset(),
@@ -332,6 +361,8 @@ impl<M: Model> Viewport<M> {
     /// content set the pager's text content. For high performance rendering the
     /// Sync command should also be called.
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    ///
+    /// If the current offset is out of range after the update, it is clamped to the bottom.
     pub fn update_content(self, child: M) -> Self {
         let s = Self { child, ..self };
         if s.offset_y > s.content_len().saturating_sub(1) {

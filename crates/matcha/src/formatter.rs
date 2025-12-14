@@ -3,6 +3,12 @@ use std::{fmt::Display, rc::Rc};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
+/// Wrap a string into lines with a maximum display width.
+///
+/// This function is *ANSI-aware*: it tries to preserve ANSI escape sequences without
+/// counting them towards the displayed width.
+///
+/// The return value is a vector of lines (without trailing `\n`).
 pub fn wrap(s: &str, max_width: u16) -> Vec<String> {
     let mut width: u16 = 0;
     let mut index = 0;
@@ -40,6 +46,10 @@ pub fn wrap(s: &str, max_width: u16) -> Vec<String> {
     result
 }
 
+/// Clamp a string to a maximum display width.
+///
+/// This function is *ANSI-aware*: it preserves escape sequences while ensuring the
+/// visible grapheme width does not exceed `max_width`.
 pub fn clamp_by(s: &str, max_width: u16) -> String {
     let mut width: u16 = 0;
     let mut result = String::new();
@@ -80,6 +90,9 @@ pub fn clamp_by(s: &str, max_width: u16) -> String {
     result
 }
 
+/// Pad `target` with spaces so its visible width becomes `max_width`.
+///
+/// The width calculation ignores ANSI escape sequences.
 pub fn fill_by_space(target: String, max_width: u16) -> String {
     let d = max_width.saturating_sub(remove_escape_sequences(&target).width() as u16);
     if d != 0 {
@@ -89,6 +102,9 @@ pub fn fill_by_space(target: String, max_width: u16) -> String {
     }
 }
 
+/// Remove ANSI escape sequences from `text`.
+///
+/// This is useful when you need to measure the "visible" width of styled strings.
 pub fn remove_escape_sequences(text: &str) -> String {
     let mut result = String::new();
     let mut graphemes = text.graphemes(true);
@@ -116,6 +132,11 @@ pub fn remove_escape_sequences(text: &str) -> String {
     result
 }
 
+/// Format a view for the given terminal size.
+///
+/// - Truncates to the last `height` lines
+/// - Clamps each line to `width` and right-pads with spaces
+/// - Joins lines using `\r\n` for terminal-friendly rendering
 pub fn format(view: impl Display, size: (u16, u16)) -> String {
     let view = view.to_string();
     let splitted: Rc<[&str]> = view.split('\n').rev().collect();

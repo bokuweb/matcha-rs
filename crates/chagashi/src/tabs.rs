@@ -11,11 +11,14 @@ use matcha::DynModel;
 
 /// A single tab: a title plus a child model that renders the content.
 pub struct Tab {
+    /// Tab title shown in the tab strip.
     pub title: String,
+    /// Child model rendered when this tab is active.
     pub child: Box<dyn DynModel>,
 }
 
 impl Tab {
+    /// Create a new tab with the given title and child model.
     pub fn new(title: impl Into<String>, child: Box<dyn DynModel>) -> Self {
         Self {
             title: title.into(),
@@ -37,6 +40,7 @@ pub struct Tabs {
 }
 
 impl Tabs {
+    /// Create a new tabs component.
     pub fn new(tabs: Vec<Tab>) -> Self {
         Self {
             width: 0,
@@ -52,10 +56,12 @@ impl Tabs {
         }
     }
 
+    /// Set the active tab index.
     pub fn active(self, active: usize) -> Self {
         Self { active, ..self }
     }
 
+    /// Set the highlight color used for the tab strip and window border.
     pub fn highlight(self, color: Color) -> Self {
         Self {
             highlight: color,
@@ -63,6 +69,7 @@ impl Tabs {
         }
     }
 
+    /// Set vertical padding (blank lines) inside the content window.
     pub fn content_padding_y(self, padding: u16) -> Self {
         Self {
             content_padding_y: padding,
@@ -70,6 +77,7 @@ impl Tabs {
         }
     }
 
+    /// Return the current active tab index.
     pub fn active_index(&self) -> usize {
         self.active
     }

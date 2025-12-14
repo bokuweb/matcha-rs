@@ -9,7 +9,7 @@ use std::{
 type AnyMap = HashMap<TypeId, Arc<Box<dyn Any + Send + Sync>>>;
 
 /// A container that allows storing and retrieving extension data in a type-safe manner.
-/// Internally, it uses [`AnyMap`] to manage the data.
+/// Internally, it uses a `HashMap<TypeId, Arc<Box<dyn Any + Send + Sync>>>` to manage the data.
 #[derive(Debug, Default, Clone)]
 pub struct Extensions(pub AnyMap);
 

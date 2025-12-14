@@ -7,7 +7,7 @@ use {
 /// A structure for storing and retrieving bindings between [`Key`] and arbitrary data.
 ///
 /// This is especially useful for setting up configuration or user-defined key mappings
-/// to certain functionalities within an application.///
+/// to certain functionalities within an application.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeyBindings<T>(pub HashMap<Key, T>);
 
@@ -54,12 +54,16 @@ impl<T> KeyBindings<T> {
         Self(bindings.into_iter().map(|k| (Key(k.0), k.1)).collect())
     }
 
+    /// Get a binding by key.
     pub fn get(&self, k: Key) -> Option<&T> {
         self.0.get(&k)
     }
 }
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+/// A thin wrapper around [`KeyCombination`].
+///
+/// This type is used as the key for [`KeyBindings`].
 pub struct Key(pub KeyCombination);
 
 impl From<&KeyEvent> for Key {
@@ -89,10 +93,12 @@ impl From<KeyEvent> for Key {
 }
 
 impl Key {
+    /// Return true if this key matches the given combination.
     pub fn matches(&self, k: KeyCombination) -> bool {
         self.0 == k
     }
 
+    /// Return the underlying [`KeyCombination`].
     pub fn combination(&self) -> KeyCombination {
         self.0
     }

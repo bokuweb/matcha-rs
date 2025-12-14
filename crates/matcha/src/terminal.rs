@@ -8,6 +8,7 @@ use crossterm::{
     },
 };
 
+/// The default [`crate::Termable`] implementation backed by `crossterm`.
 pub struct DefaultTerminal;
 
 impl crate::termable::Termable for DefaultTerminal {

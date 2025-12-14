@@ -7,6 +7,9 @@ use matcha::{batch, Cmd, Color, KeyCode, KeyEvent, KeyModifiers, Model, Msg, Sty
 use crate::cursor;
 use crate::utils::*;
 
+/// A single-line text input component.
+///
+/// This widget tracks a cursor position and handles basic editing keys.
 pub struct TextInput {
     prompt: String,
     placeholder: String,
@@ -31,6 +34,7 @@ impl Default for TextInput {
 
 impl TextInput {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Create a new text input with default settings.
     pub fn new() -> Self {
         Self {
             ..Default::default()
@@ -38,6 +42,7 @@ impl TextInput {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Set the placeholder text shown when the value is empty.
     pub fn set_placeholder(self, placeholder: impl Into<String>) -> Self {
         let placeholder = placeholder.into();
         let cursor = if !placeholder.is_empty() && self.value.is_empty() {
@@ -61,6 +66,7 @@ impl TextInput {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Focus the input (enables editing) and start cursor blinking.
     pub fn focus(self) -> (Self, Option<Cmd>) {
         let cursor = self.cursor.focus();
         (
@@ -74,16 +80,19 @@ impl TextInput {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Replace the internal cursor model.
     pub fn set_cursor(self, cursor: cursor::Cursor) -> Self {
         Self { cursor, ..self }
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Set the cursor position (grapheme index) within the value.
     pub fn set_pos(self, pos: usize) -> Self {
         Self { pos, ..self }
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Set the input value.
     pub fn set_value(self, value: impl Into<String>) -> Self {
         Self {
             value: value.into(),
@@ -115,6 +124,7 @@ impl TextInput {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Delete the character under the cursor.
     pub fn delete_forward_char(self) -> Self {
         if self.pos >= self.value.len() || !self.focus {
             return self;
@@ -125,6 +135,7 @@ impl TextInput {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Delete the character before the cursor.
     pub fn delete_back_char(self) -> Self {
         if self.pos == 0 || !self.focus {
             return self;
@@ -136,6 +147,7 @@ impl TextInput {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Move the cursor one grapheme to the left.
     pub fn move_left(self) -> Self {
         if self.focus {
             return self;
@@ -152,6 +164,7 @@ impl TextInput {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Move the cursor one grapheme to the right.
     pub fn move_right(self) -> Self {
         if self.focus {
             return self;

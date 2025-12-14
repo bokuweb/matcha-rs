@@ -1,3 +1,13 @@
+//! `matcha` is a small terminal UI framework inspired by Bubble Tea.
+//!
+//! It provides a simple architecture:
+//! - Implement [`Model`] to hold state and render a view.
+//! - Return [`Cmd`]s from `init`/`update` to perform side effects.
+//! - Send messages ([`Msg`]) back into the update loop.
+//!
+//! This crate focuses on the runtime/event-loop and basic formatting helpers.
+//! Higher-level UI components live in the companion crate `chagashi`.
+
 mod dyn_model;
 mod extension;
 mod formatter;
@@ -34,12 +44,16 @@ use futures::{future::FutureExt, StreamExt};
 pub type Msg = Box<dyn Any + Send>;
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
+/// Input provided to [`Model::init`].
+///
+/// This is typically used to initialize layout based on the initial terminal size.
 pub struct InitInput {
+    /// Initial terminal size `(width, height)` in cells.
     pub size: (u16, u16),
 }
 
-#[async_trait::async_trait]
 /// Model contains the program's state as well as its core functions.
+#[async_trait::async_trait]
 pub trait Model: Sized {
     /// Init is the first function that will be called. It returns an optional
     /// initial command. To not perform an initial command return nil.
@@ -69,8 +83,8 @@ pub trait Model: Sized {
         (self, None)
     }
 
-    /// An asynchronous function that can execute commands received from either 'init' or 'update'.
-    /// This function needs to accept a 'Cmd' and return an 'Option<Msg>'.
+    /// An asynchronous function that can execute commands received from either `init` or `update`.
+    /// This function needs to accept a [`Cmd`] and return an `Option<Cmd>`.
     /// If not needed, implementation is not required.
     /// # Example
     ///
@@ -113,26 +127,44 @@ pub trait Model: Sized {
 /// ```
 pub type CmdFn = Box<dyn FnOnce() -> Msg + Send + 'static>;
 
+/// A wrapper for synchronous commands.
+///
+/// A [`SyncCmd`] is executed immediately (on the command worker) and produces a [`Msg`].
 pub struct SyncCmd(pub CmdFn);
 
+/// A wrapper for asynchronous commands.
+///
+/// In `matcha`, async commands are still represented as a [`CmdFn`]. The runtime will
+/// call [`Model::execute`] for [`Cmd::Async`] and allow you to schedule further commands.
 pub struct AsyncCmd(pub CmdFn);
 
+/// A command produced by a model.
+///
+/// Commands represent side effects (I/O, timers, background work) and are executed
+/// outside of the model update loop.
 pub enum Cmd {
+    /// Execute a command and send the returned message into the update loop.
     Sync(SyncCmd),
+    /// Execute via [`Model::execute`].
     Async(AsyncCmd),
 }
 
 impl Cmd {
+    /// Construct a synchronous command.
     pub fn sync(f: CmdFn) -> Self {
         Self::Sync(SyncCmd(f))
     }
 
+    /// Construct an asynchronous command.
     pub fn r#async(f: CmdFn) -> Self {
         Self::Async(AsyncCmd(f))
     }
 }
 
 #[macro_export]
+/// Create a [`Cmd::Sync`] command from an expression producing a [`Msg`].
+///
+/// This is a convenience macro for `Cmd::sync(Box::new(move || ...))`.
 macro_rules! sync {
     ($expr:expr) => {
         Cmd::sync(Box::new(move || $expr))
@@ -140,6 +172,9 @@ macro_rules! sync {
 }
 
 #[macro_export]
+/// Create a [`Cmd::Async`] command from an expression producing a [`Msg`].
+///
+/// This is a convenience macro for `Cmd::r#async(Box::new(move || ...))`.
 macro_rules! r#async {
     ($expr:expr) => {
         Cmd::r#async(Box::new(move || $expr))
@@ -183,6 +218,9 @@ pub fn enter_alt_screen() -> Msg {
     Box::new(EnterAltScreenMsg)
 }
 
+/// Create a command that sleeps for `d` and then emits the message returned by `f`.
+///
+/// This is a small helper for building timer-based behavior.
 pub fn tick<F>(d: std::time::Duration, f: F) -> Cmd
 where
     F: FnOnce() -> Msg + Send + 'static,
@@ -193,6 +231,7 @@ where
     }))
 }
 
+/// A marker message type commonly used with [`tick`].
 pub struct TickMsg;
 
 /// enterAltScreenMsg in an internal message signals that the program should
@@ -206,6 +245,7 @@ pub struct ExitAltScreenMsg;
 
 /// NewProgram creates a new Program.
 impl<M: Model> Program<M> {
+    /// Create a new program using the default terminal backend.
     pub fn new(model: M, extensions: Extensions) -> Self {
         let term = DefaultTerminal;
         let (w, h) = term.size().unwrap();
@@ -219,6 +259,9 @@ impl<M: Model> Program<M> {
         }
     }
 
+    /// Create a new program using a custom terminal backend.
+    ///
+    /// This is useful for testing or integrating with non-standard terminals.
     pub fn new_with_terminal(model: M, extensions: Extensions, term: Box<dyn Termable>) -> Self {
         let (w, h) = term.size().unwrap();
         Self {
@@ -239,6 +282,7 @@ impl<M: Model> Program<M> {
         self
     }
 
+    /// Start the event loop and run until a quit message is received.
     pub async fn start(self) -> anyhow::Result<()> {
         self.inner_start().await?;
         Ok(())

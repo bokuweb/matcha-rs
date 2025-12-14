@@ -1,3 +1,8 @@
+//! A multi-line text editor (textarea) component.
+//!
+//! This module provides [`Textarea`], a basic editable buffer with cursor movement,
+//! insertion/deletion and optional borders.
+
 mod document;
 mod position;
 mod row;
@@ -19,17 +24,26 @@ use crate::{
 
 /// KeyMap defines the keybindings for the viewport.
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Key actions recognized by [`Textarea`].
 pub enum TextareaKeys {
+    /// Move cursor left.
     MoveLeft,
+    /// Move cursor right.
     MoveRight,
+    /// Move cursor up.
     MoveUp,
+    /// Move cursor down.
     MoveDown,
+    /// Insert a newline.
     InsertNewline,
+    /// Delete the character before the cursor.
     DeleteBack,
+    /// Delete the character under the cursor.
     DeleteForward,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Default keybindings for [`Textarea`].
 pub struct Keybindings(matcha::KeyBindings<TextareaKeys>);
 
 impl Default for Keybindings {
@@ -56,6 +70,9 @@ impl Default for Keybindings {
     }
 }
 
+/// A multi-line text editor component.
+///
+/// `Textarea` is a thin wrapper around an internal model and optional borders.
 pub struct Textarea(Borderize<Inner>);
 
 impl Default for Textarea {
@@ -84,41 +101,48 @@ impl Model for Textarea {
 }
 
 impl Textarea {
+    /// Create a new empty textarea.
     pub fn new() -> Self {
         Default::default()
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Set the textarea size.
     pub fn size(self, width: u16, height: u16) -> Self {
         let child = self.0.child.size(width, height);
         Self(Borderize { child, ..self.0 })
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Set the textarea width.
     pub fn width(self, width: u16) -> Self {
         let child = self.0.child.width(width);
         Self(Borderize { child, ..self.0 })
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Set the textarea height.
     pub fn height(self, height: u16) -> Self {
         let child = self.0.child.height(height);
         Self(Borderize { child, ..self.0 })
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Focus the textarea (enables editing) and starts cursor blinking.
     pub fn focus(self) -> (Self, Option<Cmd>) {
         let (child, cmd) = self.0.child.focus();
         (Self(Borderize { child, ..self.0 }), cmd)
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Create a textarea initialized with the given content.
     pub fn with_content(content: impl Into<String>) -> Self {
         let child = Inner::with_content(content);
         Self(Borderize::new(child))
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Enable a simple left border.
     pub fn border(self) -> Self {
         Self(self.0.left(BorderOption {
             show: true,
@@ -127,6 +151,9 @@ impl Textarea {
     }
 }
 
+/// Internal textarea implementation.
+///
+/// This type handles editing behavior and rendering; it is wrapped by [`Textarea`].
 pub struct Inner {
     // placeholder: String,
     width: u16,
@@ -156,11 +183,13 @@ impl Default for Inner {
 }
 
 impl Inner {
+    /// Create a new empty inner textarea model.
     pub fn new() -> Self {
         Default::default()
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Set the inner textarea size.
     pub fn size(self, width: u16, height: u16) -> Self {
         Self {
             width,
@@ -170,16 +199,19 @@ impl Inner {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Set the inner textarea width.
     pub fn width(self, width: u16) -> Self {
         Self { width, ..self }
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Set the inner textarea height.
     pub fn height(self, height: u16) -> Self {
         Self { height, ..self }
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Focus the textarea for editing.
     pub fn focus(self) -> (Self, Option<Cmd>) {
         let cursor = self.cursor.focus();
         (
@@ -193,6 +225,7 @@ impl Inner {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Create an inner textarea initialized with the given content.
     pub fn with_content(content: impl Into<String>) -> Self {
         let mut rows = Vec::new();
         for value in content.into().lines() {
@@ -402,6 +435,7 @@ impl Inner {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Delete the character before the cursor.
     pub fn delete_back(self) -> Self {
         if self.cursor_position.x > 0 || self.cursor_position.y > 0 {
             let new_self = self.move_left();
@@ -419,6 +453,7 @@ impl Inner {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Delete the character under the cursor.
     pub fn delete_forward(self) -> Self {
         let document = self.document.delete(&self.cursor_position);
         let cursor = Self::set_cursor_char(self.cursor_position, self.cursor, document.rows());

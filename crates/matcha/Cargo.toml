@@ -1,29 +1,33 @@
 [package]
-name = "matcha"
+name = "matcha-rs"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+# Keep the Rust crate name as `matcha` so existing `use matcha::...` code keeps working.
+name = "matcha"
+
 [dependencies]
-crossterm = { version = "0.27", features = ["event-stream"] }
-tokio = { version = "1", features = ["full"] }
-async-trait = "0.1.57"
-anyhow = "1.0"
-unicode-segmentation = "1.9.0"
-unicode-width = "0.1.5"
-regex = "1.10.2"
-futures = "0.3.30"
-crokey = "0.6.3"
-serde = { version = "1.0.130", features = ["derive"] }
-serde_json = { version = "1" }
-toml = "0.5"
-tracing = { version = "0.1", optional = true }
-itertools = "0.10.1"
+crossterm = { workspace = true, features = ["event-stream"] }
+tokio = { workspace = true, features = ["full"] }
+async-trait = { workspace = true }
+anyhow = { workspace = true }
+unicode-segmentation = { workspace = true }
+unicode-width = { workspace = true }
+regex = { workspace = true }
+futures = { workspace = true }
+crokey = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+toml = { workspace = true }
+tracing = { workspace = true, optional = true }
+itertools = { workspace = true }
 
 
 [dev-dependencies]
-chagashi = { version = "*", path = "../chagashi" }
+chagashi = { workspace = true }
 
 [features]
 default = []

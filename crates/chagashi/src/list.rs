@@ -1,3 +1,8 @@
+//! A list component inspired by Bubble Tea.
+//!
+//! This module is currently a work in progress. The component provides a basic list model
+//! with pagination and optional spinner support.
+
 use std::fmt::{Display, Write};
 use std::sync::Arc;
 
@@ -6,10 +11,12 @@ use matcha::KeyCode;
 use matcha::KeyEvent;
 use matcha::{style, Cmd, Color as MatchaColor, InitInput, Model as MModel, Msg, Stylize};
 
-// Define a matcha-compatible event type for easier use within this crate.
+/// A matcha-compatible event type used by the list component.
 #[derive(Debug)]
 pub enum Event {
+    /// A keyboard event.
     Key(KeyEvent),
+    /// A custom event.
     Other(Box<dyn std::any::Any + Send>),
 }
 
@@ -47,13 +54,18 @@ pub trait ItemDelegate: Send + Sync {
 
 /// A small helper type to make styling ergonomics easier in this crate.
 pub struct StylizeWrapper {
+    /// Raw content to style.
     pub content: String,
+    /// Optional foreground color.
     pub fg_color: Option<MatchaColor>,
+    /// Optional background color.
     pub bg_color: Option<MatchaColor>,
+    /// Whether to render the content in bold.
     pub bold: bool,
 }
 
 impl StylizeWrapper {
+    /// Create a new wrapper around `content`.
     pub fn new(content: impl Into<String>) -> Self {
         Self {
             content: content.into(),
@@ -63,16 +75,19 @@ impl StylizeWrapper {
         }
     }
 
+    /// Enable bold styling.
     pub fn bold(mut self) -> Self {
         self.bold = true;
         self
     }
 
+    /// Set background color.
     pub fn bg(mut self, color: MatchaColor) -> Self {
         self.bg_color = Some(color);
         self
     }
 
+    /// Set foreground color.
     pub fn with(mut self, color: MatchaColor) -> Self {
         self.fg_color = Some(color);
         self
@@ -193,6 +208,7 @@ impl Default for Model {
 }
 
 #[derive(Clone)]
+/// The default list item delegate.
 pub struct DefaultItemDelegate;
 
 impl ItemDelegate for DefaultItemDelegate {
@@ -221,57 +237,68 @@ impl ItemDelegate for DefaultItemDelegate {
 }
 
 impl Model {
+    /// Create a new list model with defaults.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Replace the item delegate used to render items and handle custom events.
     pub fn with_delegate(mut self, delegate: impl ItemDelegate + Clone + 'static) -> Self {
         self.delegate = Box::new(delegate);
         self.update_pagination();
         self
     }
 
+    /// Initialize the list items.
     pub fn with_items(mut self, items: Vec<Box<dyn Item>>) -> Self {
         self.items = items.into_iter().map(Arc::from).collect();
         self.update_pagination();
         self
     }
 
+    /// Replace the list items.
     pub fn set_items(&mut self, items: Vec<Box<dyn Item>>) {
         self.items = items.into_iter().map(Arc::from).collect();
         self.update_pagination();
     }
 
+    /// Set the available rendering area `(width, height)` in cells.
     pub fn set_size(&mut self, width: usize, height: usize) {
         self.width = width;
         self.height = height;
         self.update_pagination();
     }
 
+    /// Set the list title.
     pub fn set_title(&mut self, title: impl Into<String>) {
         self.title = title.into();
     }
 
+    /// Show/hide the title line.
     pub fn set_show_title(&mut self, show: bool) {
         self.show_title = show;
         self.update_pagination();
     }
 
+    /// Show/hide the status bar.
     pub fn set_show_status_bar(&mut self, show: bool) {
         self.show_status_bar = show;
         self.update_pagination();
     }
 
+    /// Show/hide the pagination line.
     pub fn set_show_pagination(&mut self, show: bool) {
         self.show_pagination = show;
         self.update_pagination();
     }
 
+    /// Show/hide the help line.
     pub fn set_show_help(&mut self, show: bool) {
         self.show_help = show;
         self.update_pagination();
     }
 
+    /// Set the item label used by the status bar (singular/plural).
     pub fn set_status_bar_item_name(
         &mut self,
         singular: impl Into<String>,
@@ -281,16 +308,19 @@ impl Model {
         self.item_name_plural = plural.into();
     }
 
+    /// Start showing the spinner and schedule the first tick.
     pub fn start_spinner(&mut self) -> Option<Cmd> {
         self.show_spinner = true;
         let tag = self.spinner.id() + 1;
         Some(self.spinner.tick(tag))
     }
 
+    /// Stop showing the spinner.
     pub fn stop_spinner(&mut self) {
         self.show_spinner = false;
     }
 
+    /// Toggle the spinner. Returns a command if enabling.
     pub fn toggle_spinner(&mut self) -> Option<Cmd> {
         if !self.show_spinner {
             self.start_spinner()
@@ -300,10 +330,12 @@ impl Model {
         }
     }
 
+    /// Return all currently visible items.
     pub fn visible_items(&self) -> Vec<Arc<dyn Item>> {
         self.items.clone()
     }
 
+    /// Get the currently selected item (if any).
     pub fn selected_item(&self) -> Option<Arc<dyn Item>> {
         let i = self.index();
         let items = self.visible_items();
@@ -315,10 +347,12 @@ impl Model {
         Some(items[i].clone())
     }
 
+    /// Return the absolute index of the selected item in the item list.
     pub fn index(&self) -> usize {
         self.page * self.per_page + self.cursor
     }
 
+    /// Move selection up.
     pub fn cursor_up(&mut self) {
         if self.cursor > 0 {
             self.cursor -= 1;
@@ -341,6 +375,7 @@ impl Model {
         }
     }
 
+    /// Move selection down.
     pub fn cursor_down(&mut self) {
         let items_on_page = self.items_on_page();
 
@@ -360,6 +395,7 @@ impl Model {
         }
     }
 
+    /// Move to previous page.
     pub fn prev_page(&mut self) {
         if self.page > 0 {
             self.page -= 1;
@@ -371,6 +407,7 @@ impl Model {
         }
     }
 
+    /// Move to next page.
     pub fn next_page(&mut self) {
         if self.page + 1 < self.total_pages {
             self.page += 1;
@@ -382,11 +419,13 @@ impl Model {
         }
     }
 
+    /// Jump to the first item.
     pub fn go_to_start(&mut self) {
         self.page = 0;
         self.cursor = 0;
     }
 
+    /// Jump to the last item.
     pub fn go_to_end(&mut self) {
         self.page = self.total_pages - 1;
         let items_on_page = self.items_on_page();
@@ -597,17 +636,22 @@ impl Model {
         Ok(())
     }
 
+    /// Enable/disable infinite scrolling for cursor navigation.
     pub fn with_infinite_scrolling(mut self, enabled: bool) -> Self {
         self.infinite_scrolling = enabled;
         self
     }
 
+    /// Update the list using an external event.
+    ///
+    /// Note: currently a placeholder. Keyboard events are handled by the `matcha::Model` impl.
     pub fn update(&mut self, _event: Event) -> Option<Cmd> {
         None
     }
 }
 
 impl Model {
+    /// Render the list into `w`.
     pub fn render<W: Write>(&self, w: &mut W) -> Result<(), std::fmt::Error> {
         // Render title
         if self.show_title {

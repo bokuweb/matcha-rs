@@ -2,22 +2,28 @@ use super::Position;
 use super::Row;
 
 #[derive(Default)]
+/// Text buffer used by [`super::Textarea`].
+///
+/// The document is represented as a vector of rows.
 pub struct Document {
     rows: Vec<Row>,
 }
 
 impl Document {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Create a document from a list of rows.
     pub fn with_rows(rows: impl Into<Vec<Row>>) -> Self {
         Self { rows: rows.into() }
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Get a row by index.
     pub fn row(&self, index: usize) -> Option<&Row> {
         self.rows.get(index)
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Borrow all rows.
     pub fn rows(&self) -> &[Row] {
         &self.rows
     }
@@ -27,11 +33,13 @@ impl Document {
     // }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Number of rows in the document.
     pub fn len(&self) -> usize {
         self.rows.len()
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Insert a character at a cursor position.
     pub fn insert(self, at: &Position, c: char) -> Self {
         if at.y > self.rows.len() {
             return self;
@@ -51,6 +59,7 @@ impl Document {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Insert a newline at a cursor position.
     pub fn insert_newline(self, at: &Position) -> Self {
         if at.y > self.rows.len() {
             return self;
@@ -69,6 +78,9 @@ impl Document {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Delete a character at a cursor position.
+    ///
+    /// If the cursor is at end-of-line and there is a next row, the next row is appended.
     pub fn delete(self, at: &Position) -> Self {
         let len = self.rows.len();
         if at.y >= len {

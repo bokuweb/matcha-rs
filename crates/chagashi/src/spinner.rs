@@ -7,6 +7,9 @@ use std::sync::atomic::AtomicUsize;
 static ID: AtomicUsize = AtomicUsize::new(1);
 
 #[cfg(not(test))]
+/// Generate the next unique spinner id.
+///
+/// This is used internally to disambiguate tick messages across multiple spinners.
 pub fn next_id() -> usize {
     use std::sync::atomic::Ordering;
 
@@ -16,6 +19,7 @@ pub fn next_id() -> usize {
 }
 
 #[cfg(test)]
+/// Deterministic id generator for tests.
 pub fn next_id() -> usize {
     1
 }
@@ -23,53 +27,87 @@ pub fn next_id() -> usize {
 /// Spinner is a set of frames used in animating the spinner.
 #[derive(Clone, Copy, Debug)]
 pub enum SpinnerType {
+    /// A 4-frame ASCII line spinner.
     Line {
+        /// Frames used to render the spinner.
         frames: [&'static str; 4],
+        /// Frame interval.
         fps: std::time::Duration,
     },
+    /// A braille dot spinner.
     Dot {
+        /// Frames used to render the spinner.
         frames: [&'static str; 8],
+        /// Frame interval.
         fps: std::time::Duration,
     },
+    /// A compact dot spinner.
     MiniDot {
+        /// Frames used to render the spinner.
         frames: [&'static str; 10],
+        /// Frame interval.
         fps: std::time::Duration,
     },
+    /// A jumping block spinner.
     Jump {
+        /// Frames used to render the spinner.
         frames: [&'static str; 7],
+        /// Frame interval.
         fps: std::time::Duration,
     },
+    /// A pulsing shade spinner.
     Pulse {
+        /// Frames used to render the spinner.
         frames: [&'static str; 4],
+        /// Frame interval.
         fps: std::time::Duration,
     },
+    /// A three-dot "points" spinner.
     Points {
+        /// Frames used to render the spinner.
         frames: [&'static str; 4],
+        /// Frame interval.
         fps: std::time::Duration,
     },
+    /// A globe emoji spinner.
     Globe {
+        /// Frames used to render the spinner.
         frames: [&'static str; 3],
+        /// Frame interval.
         fps: std::time::Duration,
     },
+    /// A moon emoji spinner.
     Moon {
+        /// Frames used to render the spinner.
         frames: [&'static str; 8],
+        /// Frame interval.
         fps: std::time::Duration,
     },
+    /// A monkey emoji spinner.
     Monkey {
+        /// Frames used to render the spinner.
         frames: [&'static str; 3],
+        /// Frame interval.
         fps: std::time::Duration,
     },
+    /// A meter spinner.
     Meter {
+        /// Frames used to render the spinner.
         frames: [&'static str; 7],
+        /// Frame interval.
         fps: std::time::Duration,
     },
+    /// A hamburger spinner.
     Hamburger {
+        /// Frames used to render the spinner.
         frames: [&'static str; 4],
+        /// Frame interval.
         fps: std::time::Duration,
     },
 }
 
 impl SpinnerType {
+    /// A simple ASCII line spinner (`| / - \`).
     pub fn line() -> Self {
         Self::Line {
             frames: ["|", "/", "-", "\\"],
@@ -77,6 +115,7 @@ impl SpinnerType {
         }
     }
 
+    /// A braille-dot style spinner.
     pub fn dot() -> Self {
         Self::Dot {
             frames: ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"],
@@ -84,6 +123,7 @@ impl SpinnerType {
         }
     }
 
+    /// A compact dot spinner.
     pub fn mini_dot() -> Self {
         Self::MiniDot {
             frames: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
@@ -91,6 +131,7 @@ impl SpinnerType {
         }
     }
 
+    /// A jumping block spinner.
     pub fn jump() -> Self {
         Self::Jump {
             frames: ["⢄", "⢂", "⢁", "⡁", "⡈", "⡐", "⡠"],
@@ -98,6 +139,7 @@ impl SpinnerType {
         }
     }
 
+    /// A pulsing shade spinner.
     pub fn pulse() -> Self {
         Self::Pulse {
             frames: ["█", "▓", "▒", "░"],
@@ -105,6 +147,7 @@ impl SpinnerType {
         }
     }
 
+    /// A three-dot "points" spinner.
     pub fn points() -> Self {
         Self::Points {
             frames: ["∙∙∙", "●∙∙", "∙●∙", "∙∙●"],
@@ -112,6 +155,7 @@ impl SpinnerType {
         }
     }
 
+    /// A globe emoji spinner.
     pub fn globe() -> Self {
         Self::Globe {
             frames: ["🌍", "🌎", "🌏"],
@@ -119,6 +163,7 @@ impl SpinnerType {
         }
     }
 
+    /// A moon phase emoji spinner.
     pub fn moon() -> Self {
         Self::Moon {
             frames: ["🌑", "🌒", "🌓", "🌔", "🌕", "🌖", "🌗", "🌘"],
@@ -126,6 +171,7 @@ impl SpinnerType {
         }
     }
 
+    /// A monkey emoji spinner.
     pub fn monkey() -> Self {
         Self::Monkey {
             frames: ["🙈", "🙉", "🙊"],
@@ -133,6 +179,7 @@ impl SpinnerType {
         }
     }
 
+    /// A meter-style spinner.
     pub fn meter() -> Self {
         Self::Meter {
             frames: ["▱▱▱", "▰▱▱", "▰▰▱", "▰▰▰", "▰▰▱", "▰▱▱", "▱▱▱"],
@@ -140,6 +187,7 @@ impl SpinnerType {
         }
     }
 
+    /// A hamburger-style spinner.
     pub fn hamburger() -> Self {
         Self::Hamburger {
             frames: ["☱", "☲", "☴", "☲"],
@@ -219,12 +267,13 @@ impl Default for Spinner {
     }
 }
 
-// ID returns the spinner's unique ID.
 impl Spinner {
+    /// Return the spinner's unique id.
     pub fn id(&self) -> usize {
         self.id
     }
 
+    /// Set the spinner color.
     pub fn set_color(self, color: Color) -> Self {
         Self {
             color: Some(color),
@@ -232,10 +281,12 @@ impl Spinner {
         }
     }
 
+    /// Get the current spinner color.
     pub fn color(&self) -> Option<Color> {
         self.color
     }
 
+    /// Set the spinner type (frames + fps).
     pub fn set_spinner_type(self, spinner: SpinnerType) -> Self {
         Self {
             spinner_type: spinner,
@@ -243,6 +294,7 @@ impl Spinner {
         }
     }
 
+    /// Get the current spinner type.
     pub fn spinner_type(self) -> SpinnerType {
         self.spinner_type
     }
@@ -256,6 +308,9 @@ impl Spinner {
         }
     }
 
+    /// Create a tick command that advances the spinner animation.
+    ///
+    /// `tag` is used to prevent out-of-order tick bursts.
     pub fn tick(&self, tag: usize) -> Cmd {
         let id = self.id;
         tick(self.spinner_type.fps(), move || {
@@ -266,7 +321,9 @@ impl Spinner {
 
 /// TickMsg indicates that the timer has ticked and we should render a frame.
 pub struct TickMsg {
+    /// A monotonically increasing tag used to reject stale ticks.
     pub tag: usize,
+    /// Spinner id.
     pub id: usize,
 }
 

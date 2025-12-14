@@ -5,12 +5,15 @@ use matcha::*;
 struct Timeout(usize);
 
 #[derive(Debug)]
+/// A blinking cursor model used by input components.
+///
+/// This model renders the character under the cursor and toggles inverse video while blinking.
 pub struct Cursor {
     /// The ID of this Cursor as it relates to other cursors
     id: usize,
     /// Cursor Blink state.
     blink: bool,
-    ///  Cursor blink speed.z
+    /// Cursor blink interval.
     blink_speed: Duration,
     /// The ID of the blink message we're expecting to receive.
     blink_tag: usize,
@@ -90,7 +93,9 @@ impl Model for Cursor {
     }
 }
 
-// Blink is a command used to initialize cursor blinking.
+/// A message used to initialize cursor blinking.
+///
+/// This is typically scheduled by [`Cursor::set_mode`] when switching to blink mode.
 pub fn blink() -> Msg {
     Box::new(InitialBlinkMsg)
 }
@@ -112,6 +117,7 @@ impl Default for Cursor {
 }
 
 impl Cursor {
+    /// Create a new cursor with default settings.
     pub fn new() -> Self {
         Self::default()
     }
@@ -254,9 +260,13 @@ impl Cursor {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, derive_more::Display)]
+/// Cursor display mode.
 pub enum CursorMode {
+    /// Blink using inverse video.
     Blink,
+    /// Always visible (no blinking).
     Static,
+    /// Hidden cursor (always rendered as "not blinking").
     Hide,
 }
 
