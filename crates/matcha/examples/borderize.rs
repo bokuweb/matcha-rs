@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use chagashi::borderize::Borderize;
+use chagashi::borderize::{BorderOption, Borderize};
 use matcha::{quit, Cmd, Extensions, KeyEvent, Model, Msg, Program};
 
 struct Content;
@@ -35,7 +35,23 @@ impl<M: Model> Model for App<M> {
 async fn main() -> Result<(), ()> {
     let p = Program::new(
         App {
-            child: Borderize::new(Content),
+            child: Borderize::new(Content)
+                .top(BorderOption {
+                    show: true,
+                    ..Default::default()
+                })
+                .right(BorderOption {
+                    show: true,
+                    ..Default::default()
+                })
+                .bottom(BorderOption {
+                    show: true,
+                    ..Default::default()
+                })
+                .left(BorderOption {
+                    show: true,
+                    ..Default::default()
+                }),
         },
         Extensions::default(),
     );

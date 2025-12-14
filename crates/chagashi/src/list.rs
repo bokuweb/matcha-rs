@@ -516,19 +516,18 @@ impl Model {
                 self.go_to_end();
             }
             _ => {
-                // Let the delegate handle the event
-                // let mut model_clone = self.clone();
-                // if let Some(event) = self
-                //     .delegate
-                //     .update(Event::Key(key.clone()), &mut model_clone)
-                // {
-                //     // Apply changes if needed
-                //     *self = model_clone;
-                //     return Some(Cmd::sync(Box::new(move || {
-                //         Box::new(event) as Box<dyn std::any::Any + Send>
-                //     })));
-                // }
-                todo!();
+                // Let the delegate handle other keys (e.g. Enter).
+                // This prevents examples from panicking on unhandled input and allows
+                // custom delegates to emit events back to the app.
+                // We temporarily move the delegate out to avoid borrowing `self` both
+                // immutably (for `delegate`) and mutably (for the `model` argument).
+                let delegate = std::mem::replace(&mut self.delegate, Box::new(DefaultItemDelegate));
+                let event = delegate.update(Event::Key(*key), self);
+                self.delegate = delegate;
+
+                if let Some(event) = event {
+                    return Some(Cmd::sync(Box::new(move || Box::new(event) as Msg)));
+                }
             }
         }
         None

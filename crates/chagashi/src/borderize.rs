@@ -113,45 +113,59 @@ impl<M: Model> Model for Borderize<M> {
                     "".to_string()
                 };
                 let right: String = if self.right.show {
-                    self.right
-                        .color
-                        .iter()
-                        .cloned()
-                        .map(|c| style(&b.right).with(c).to_string())
-                        .collect()
+                    if let Some(c) = self.right.color {
+                        style(&b.right).with(c).to_string()
+                    } else {
+                        b.right.to_string()
+                    }
                 } else {
                     "".to_string()
                 };
                 let s = format!("{}{}{}", left, fill_by_space(line, w), right);
-                // self.top
-                //     .color
-                //     .iter()
-                //     .cloned()
-                //     .map(|c| style(s.clone()).with(c).to_string())
-                //     .collect()
                 s
             })
             .collect();
 
         if self.top.show {
-            let b = format!("{}{}{}", b.top_left, b.top.repeat(w as usize), b.top_right);
-            // let b = self
-            //     .top
-            //     .color
-            //     .iter()
-            //     .cloned()
-            //     .map(|c| style(&b).with(c).to_string())
-            //     .collect();
-            lines.insert(0, b);
+            let left_corner = if self.left.show { b.top_left } else { b.top };
+            let right_corner = if self.right.show { b.top_right } else { b.top };
+            let raw = format!(
+                "{}{}{}",
+                left_corner,
+                b.top.repeat(w as usize),
+                right_corner
+            );
+            let rendered = if let Some(c) = self.top.color {
+                style(&raw).with(c).to_string()
+            } else {
+                raw
+            };
+            lines.insert(0, rendered);
         }
 
         if self.bottom.show {
-            lines.push(format!(
-                "{}{}{}",
-                b.bottom_left,
-                b.bottom.repeat(w as usize),
+            let left_corner = if self.left.show {
+                b.bottom_left
+            } else {
+                b.bottom
+            };
+            let right_corner = if self.right.show {
                 b.bottom_right
-            ));
+            } else {
+                b.bottom
+            };
+            let raw = format!(
+                "{}{}{}",
+                left_corner,
+                b.bottom.repeat(w as usize),
+                right_corner
+            );
+            let rendered = if let Some(c) = self.bottom.color {
+                style(&raw).with(c).to_string()
+            } else {
+                raw
+            };
+            lines.push(rendered);
         }
         lines.join("\n")
     }
