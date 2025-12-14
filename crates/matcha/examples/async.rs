@@ -3,6 +3,7 @@ use std::fmt::Display;
 use matcha::{
     quit, style, AsyncCmd, Cmd, Extensions, InitInput, KeyEvent, Model, Msg, Program, Stylize,
 };
+use futures::FutureExt;
 
 pub fn init() -> Msg {
     Box::new(AsyncMsg) as Msg
