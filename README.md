@@ -1,7 +1,7 @@
 <div align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./logo_white.svg">
-    <img alt="matcha-rs logo" src="./logo_black.svg" width="320">
+    <img alt="matcha-rs logo" src="./logo_black.svg" width="240">
   </picture>
 </div>
 
