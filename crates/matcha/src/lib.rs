@@ -21,7 +21,7 @@ pub use extension::*;
 pub use formatter::*;
 pub use key::*;
 pub use messages::*;
-use termable::Termable;
+pub use termable::Termable;
 use terminal::DefaultTerminal;
 
 pub extern crate crossterm;
@@ -525,7 +525,9 @@ mod tests {
     };
     use tokio::sync::mpsc;
 
-    use crate::{quit, Cmd, Extensions, KeyCode, KeyEvent, KeyModifiers, Model, Msg, Program, Termable};
+    use crate::{
+        quit, Cmd, Extensions, KeyCode, KeyEvent, KeyModifiers, Model, Msg, Program, Termable,
+    };
 
     struct FakeTerminal {
         printed: Arc<Mutex<Vec<String>>>,
@@ -541,24 +543,52 @@ mod tests {
         fn size(&self) -> Result<(u16, u16), std::io::Error> {
             Ok((80, 24))
         }
-        fn hide_cursor(&self) -> Result<(), std::io::Error> { Ok(()) }
-        fn show_cursor(&self) -> Result<(), std::io::Error> { Ok(()) }
-        fn enable_raw_mode(&self) -> Result<(), std::io::Error> { Ok(()) }
-        fn disable_raw_mode(&self) -> Result<(), std::io::Error> { Ok(()) }
+        fn hide_cursor(&self) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+        fn show_cursor(&self) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+        fn enable_raw_mode(&self) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+        fn disable_raw_mode(&self) -> Result<(), std::io::Error> {
+            Ok(())
+        }
         fn print(&self, v: &str) -> Result<(), std::io::Error> {
             self.printed.lock().unwrap().push(v.to_string());
             Ok(())
         }
-        fn enter_alt_screen(&self) -> Result<(), std::io::Error> { Ok(()) }
-        fn leave_alt_screen(&self) -> Result<(), std::io::Error> { Ok(()) }
-        fn enable_mouse_capture(&self) -> Result<(), std::io::Error> { Ok(()) }
-        fn disable_mouse_capture(&self) -> Result<(), std::io::Error> { Ok(()) }
-        fn move_to_column(&self, _y: u16) -> Result<(), std::io::Error> { Ok(()) }
-        fn move_to(&self, _x: u16, _y: u16) -> Result<(), std::io::Error> { Ok(()) }
-        fn cursor_position(&self) -> Result<(u16, u16), std::io::Error> { Ok((0, 0)) }
-        fn clear_all(&self) -> Result<(), std::io::Error> { Ok(()) }
-        fn clear_current_line(&self) -> Result<(), std::io::Error> { Ok(()) }
-        fn clear_current_line_and_move_previous(&self) -> Result<(), std::io::Error> { Ok(()) }
+        fn enter_alt_screen(&self) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+        fn leave_alt_screen(&self) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+        fn enable_mouse_capture(&self) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+        fn disable_mouse_capture(&self) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+        fn move_to_column(&self, _y: u16) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+        fn move_to(&self, _x: u16, _y: u16) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+        fn cursor_position(&self) -> Result<(u16, u16), std::io::Error> {
+            Ok((0, 0))
+        }
+        fn clear_all(&self) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+        fn clear_current_line(&self) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+        fn clear_current_line_and_move_previous(&self) -> Result<(), std::io::Error> {
+            Ok(())
+        }
     }
 
     struct TestModel {
@@ -590,16 +620,28 @@ mod tests {
         let term = FakeTerminal::new(printed.clone());
         let (tx, rx) = mpsc::channel::<Msg>(8);
 
-        tx.send(Box::new(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE)))
-            .await
-            .unwrap();
-        tx.send(Box::new(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE)))
-            .await
-            .unwrap();
+        tx.send(Box::new(KeyEvent::new(
+            KeyCode::Char('a'),
+            KeyModifiers::NONE,
+        )))
+        .await
+        .unwrap();
+        tx.send(Box::new(KeyEvent::new(
+            KeyCode::Char('q'),
+            KeyModifiers::NONE,
+        )))
+        .await
+        .unwrap();
         drop(tx);
 
-        let p = Program::new_with_terminal(TestModel { seen: String::new() }, Extensions::default(), Box::new(term))
-            .with_input_receiver(rx);
+        let p = Program::new_with_terminal(
+            TestModel {
+                seen: String::new(),
+            },
+            Extensions::default(),
+            Box::new(term),
+        )
+        .with_input_receiver(rx);
         p.start().await.unwrap();
 
         let out = printed.lock().unwrap();
