@@ -4,6 +4,7 @@ resolver = "2"
 members = [
   "crates/matcha",
   "crates/chagashi",
+  "crates/fuzz",
 ]
 
 [workspace.dependencies]
