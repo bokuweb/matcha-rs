@@ -412,6 +412,11 @@ impl<M: Model> Model for Viewport<M> {
             let m = Box::new(ViewportOnSelectMsg::new(self.selection_y));
             cmds.push(Cmd::sync(Box::new(move || m)));
         }
+        let cmd = if cmds.is_empty() {
+            None
+        } else {
+            Some(batch(cmds))
+        };
         (
             Self {
                 width: input.size.0,
@@ -419,7 +424,7 @@ impl<M: Model> Model for Viewport<M> {
                 child,
                 ..self
             },
-            Some(batch(cmds)),
+            cmd,
         )
     }
 
@@ -430,6 +435,7 @@ impl<M: Model> Model for Viewport<M> {
         if let Some(c) = child_cmd {
             commands.push(c);
         }
+        let old_selection_y = self.selection_y;
         let new_self = Self {
             child: new_child,
             ..self
@@ -444,20 +450,29 @@ impl<M: Model> Model for Viewport<M> {
                     Some(ViewportKeys::PageUp) => new_self.page_up(),
                     _ => new_self,
                 };
-                #[allow(unused)] // INFO: maybe false positive.
-                let m = Box::new(ViewportOnSelectMsg {
-                    index: new_self.selection_y,
-                });
+
                 #[cfg(feature = "tracing")]
-                tracing::trace!("selection_y = {}", self.selection_y);
-                (new_self, Some(Cmd::sync(Box::new(move || m))))
+                tracing::trace!("selection_y = {}", old_selection_y);
+
+                if new_self.selection && old_selection_y != new_self.selection_y {
+                    let index = new_self.selection_y;
+                    let cmd = Cmd::sync(Box::new(move || Box::new(ViewportOnSelectMsg { index })));
+                    (new_self, Some(cmd))
+                } else {
+                    (new_self, None)
+                }
             } else {
                 (new_self, None)
             };
         if let Some(c) = cmd {
             commands.push(c);
         }
-        (new_self, Some(batch(commands)))
+        let cmd = if commands.is_empty() {
+            None
+        } else {
+            Some(batch(commands))
+        };
+        (new_self, cmd)
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
@@ -527,5 +542,13 @@ mod tests {
             .on(selection_bg)
             .to_string();
         assert_eq!(lines[1], expected);
+    }
+
+    #[test]
+    fn update_does_not_emit_select_msg_when_selection_disabled() {
+        let viewport = build_viewport(ViewportOption::default(), "a\nb\nc", (3, 2));
+        let key_event: Msg = Box::new(KeyEvent::new(KeyCode::Down, KeyModifiers::empty()));
+        let (_, cmd) = viewport.update(&key_event);
+        assert!(cmd.is_none());
     }
 }
