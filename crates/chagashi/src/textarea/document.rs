@@ -98,3 +98,117 @@ impl Document {
         Self { rows }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Document, Position, Row};
+    use proptest::prelude::*;
+    use unicode_segmentation::UnicodeSegmentation;
+
+    fn grapheme_len(value: &str) -> usize {
+        value.graphemes(true).count()
+    }
+
+    fn doc_from_strings(rows: &[String]) -> Document {
+        let rows = rows.iter().map(|s| Row::from(s.as_str())).collect::<Vec<_>>();
+        Document::with_rows(rows)
+    }
+
+    fn doc_to_strings(doc: &Document) -> Vec<String> {
+        doc.rows().iter().map(|r| r.as_str().to_string()).collect()
+    }
+
+    fn reference_insert(value: &str, at: usize, c: char) -> String {
+        let mut result = String::new();
+        let mut inserted = false;
+        for (idx, g) in value.graphemes(true).enumerate() {
+            if idx == at {
+                result.push(c);
+                inserted = true;
+            }
+            result.push_str(g);
+        }
+        if !inserted {
+            result.push(c);
+        }
+        result
+    }
+
+    proptest! {
+        #[test]
+        fn insert_into_existing_row_matches_reference(
+            rows in proptest::collection::vec(any::<String>(), 1..6),
+            y in any::<usize>(),
+            x in any::<usize>(),
+            c in any::<char>(),
+        ) {
+            let row_index = y % rows.len();
+            let mut expected = rows.clone();
+            let x = {
+                let len = grapheme_len(&expected[row_index]);
+                if len == 0 { 0 } else { x % (len + 1) }
+            };
+            expected[row_index] = reference_insert(&expected[row_index], x, c);
+
+            let doc = doc_from_strings(&rows);
+            let doc = doc.insert(&Position::new(x, row_index), c);
+
+            prop_assert_eq!(doc_to_strings(&doc), expected);
+        }
+
+        #[test]
+        fn insert_newline_keeps_or_increments_row_count(
+            rows in proptest::collection::vec(any::<String>(), 0..6),
+            y in any::<usize>(),
+            x in any::<usize>(),
+        ) {
+            let len = rows.len();
+            let doc = doc_from_strings(&rows);
+
+            let at = if len == 0 {
+                Position::new(0, y % 2)
+            } else {
+                Position::new(x, y % (len + 2))
+            };
+
+            let updated = doc.insert_newline(&at);
+            let expected_len = if at.y <= len { len + 1 } else { len };
+            prop_assert_eq!(updated.len(), expected_len);
+        }
+
+        #[test]
+        fn delete_at_end_of_row_merges_next_row(
+            left in any::<String>(),
+            right in any::<String>(),
+        ) {
+            let left_len = grapheme_len(&left);
+            let rows = vec![left.clone(), right.clone()];
+            let doc = doc_from_strings(&rows);
+
+            let updated = doc.delete(&Position::new(left_len, 0));
+            let actual = doc_to_strings(&updated);
+
+            prop_assert_eq!(actual.len(), 1);
+            prop_assert_eq!(actual[0].as_str(), format!("{left}{right}"));
+        }
+
+        #[test]
+        fn insert_newline_then_delete_restores_original_row(
+            rows in proptest::collection::vec(any::<String>(), 1..6),
+            y in any::<usize>(),
+            x in any::<usize>(),
+        ) {
+            let row_index = y % rows.len();
+            let split_at = {
+                let len = grapheme_len(&rows[row_index]);
+                if len == 0 { 0 } else { x % (len + 1) }
+            };
+
+            let doc = doc_from_strings(&rows);
+            let doc = doc.insert_newline(&Position::new(split_at, row_index));
+            let doc = doc.delete(&Position::new(split_at, row_index));
+
+            prop_assert_eq!(doc_to_strings(&doc), rows);
+        }
+    }
+}
