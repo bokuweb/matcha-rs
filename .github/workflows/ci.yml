@@ -37,13 +37,13 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Lint (clippy)
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --workspace --exclude chagashi-fuzz --all-targets --all-features -- -D warnings
 
       - name: Build
-        run: cargo build --all-features
+        run: cargo build --workspace --exclude chagashi-fuzz --all-features
 
       - name: Test
-        run: cargo test --all-features
+        run: cargo test --workspace --exclude chagashi-fuzz --all-features
 
   property-tests:
     name: Property Tests (chagashi)
