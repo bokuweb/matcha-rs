@@ -21,7 +21,7 @@ impl Row {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
     /// Render a slice of the row from grapheme index `start` to `end`.
     pub fn render(&self, start: usize, end: usize) -> String {
-        let end = cmp::min(end, self.string.len());
+        let end = cmp::min(end, self.len);
         let start = cmp::min(start, end);
         let mut result = String::new();
         for grapheme in self.string[..]
@@ -131,5 +131,91 @@ impl Row {
     /// Borrow the underlying string.
     pub fn as_str(&self) -> &str {
         self.string.as_str()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Row;
+    use proptest::prelude::*;
+    use unicode_segmentation::UnicodeSegmentation;
+
+    fn grapheme_len(value: &str) -> usize {
+        value.graphemes(true).count()
+    }
+
+    fn reference_insert(value: &str, at: usize, c: char) -> String {
+        let mut result = String::new();
+        let mut inserted = false;
+        for (idx, g) in value.graphemes(true).enumerate() {
+            if idx == at {
+                result.push(c);
+                inserted = true;
+            }
+            result.push_str(g);
+        }
+        if !inserted {
+            result.push(c);
+        }
+        result
+    }
+
+    fn reference_delete(value: &str, at: usize) -> String {
+        value
+            .graphemes(true)
+            .enumerate()
+            .filter_map(|(idx, g)| if idx == at { None } else { Some(g) })
+            .collect()
+    }
+
+    proptest! {
+        #[test]
+        fn insert_matches_reference(
+            value in proptest::string::string_regex("[ -~]*").expect("valid regex"),
+            at in any::<usize>(),
+            c in proptest::char::range(' ', '~'),
+        ) {
+            let len = grapheme_len(&value);
+            let index = if len == 0 { 0 } else { at % (len + 1) };
+            let expected = reference_insert(&value, index, c);
+
+            let mut row = Row::from(value.as_str());
+            row.insert(index, c);
+
+            prop_assert_eq!(row.as_str(), expected);
+            prop_assert_eq!(row.len(), grapheme_len(row.as_str()));
+        }
+
+        #[test]
+        fn delete_matches_reference(
+            value in proptest::string::string_regex("[ -~]*").expect("valid regex"),
+            at in any::<usize>(),
+        ) {
+            let len = grapheme_len(&value);
+            let index = if len == 0 { 0 } else { at % (len + 1) };
+            let expected = reference_delete(&value, index);
+
+            let mut row = Row::from(value.as_str());
+            row.delete(index);
+
+            prop_assert_eq!(row.as_str(), expected);
+            prop_assert_eq!(row.len(), grapheme_len(row.as_str()));
+        }
+
+        #[test]
+        fn split_then_append_restores_original(
+            value in proptest::string::string_regex("[ -~]*").expect("valid regex"),
+            at in any::<usize>(),
+        ) {
+            let len = grapheme_len(&value);
+            let index = if len == 0 { 0 } else { at % (len + 1) };
+
+            let mut head = Row::from(value.as_str());
+            let tail = head.split(index);
+            head.append(&tail);
+
+            prop_assert_eq!(head.as_str(), value);
+            prop_assert_eq!(head.len(), grapheme_len(head.as_str()));
+        }
     }
 }

@@ -88,7 +88,11 @@ impl TextInput {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
     /// Set the cursor position (grapheme index) within the value.
     pub fn set_pos(self, pos: usize) -> Self {
-        Self { pos, ..self }
+        let max = self.value.graphemes(true).count();
+        Self {
+            pos: std::cmp::min(pos, max),
+            ..self
+        }
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
@@ -118,7 +122,7 @@ impl TextInput {
         let cur = self.cursor.set_char(" ");
         Self {
             cursor: cur,
-            pos: self.value.len(),
+            pos: self.value.graphemes(true).count(),
             ..self
         }
     }
@@ -126,7 +130,7 @@ impl TextInput {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
     /// Delete the character under the cursor.
     pub fn delete_forward_char(self) -> Self {
-        if self.pos >= self.value.len() || !self.focus {
+        if self.pos >= self.value.graphemes(true).count() || !self.focus {
             return self;
         }
         let value = self.value;
@@ -149,7 +153,7 @@ impl TextInput {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
     /// Move the cursor one grapheme to the left.
     pub fn move_left(self) -> Self {
-        if self.focus {
+        if !self.focus {
             return self;
         }
         let pos = self.pos.saturating_sub(1);
@@ -166,7 +170,7 @@ impl TextInput {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
     /// Move the cursor one grapheme to the right.
     pub fn move_right(self) -> Self {
-        if self.focus {
+        if !self.focus {
             return self;
         }
         let pos = std::cmp::min(
@@ -186,7 +190,7 @@ impl TextInput {
     /// placeholderView returns the prompt and placeholder view, if any.
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
     pub fn placeholder_view(&self) -> String {
-        let placeholder = &self.placeholder[1..];
+        let (_, placeholder) = split_at(self.placeholder.clone(), 1);
         let placeholder = placeholder.with(Color::AnsiValue(240)).to_string();
         self.prompt.clone() + &format!("{}", self.cursor.view()) + &placeholder
     }
@@ -291,7 +295,7 @@ impl Model for TextInput {
             let (_, tail) = split_at(value, 1);
             return self.prompt.clone() + &format!("{}", self.cursor.view()) + &tail;
         }
-        if self.pos < self.value.len() {
+        if self.pos < self.value.graphemes(true).count() {
             let (head, tail) = split_at(value, self.pos);
             let tail = if tail.is_empty() {
                 tail
@@ -307,6 +311,174 @@ impl Model for TextInput {
             self.prompt.clone() + &self.value + &format!("{}", self.cursor.view())
         } else {
             self.prompt.clone() + &self.value
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TextInput;
+    use crate::cursor::{Cursor, CursorMode};
+    use crate::utils::{insert_char, remove_char};
+    use matcha::{KeyCode, KeyEvent, KeyModifiers, Model, Msg};
+    use proptest::prelude::*;
+    use proptest::test_runner::Config as ProptestConfig;
+    use unicode_segmentation::UnicodeSegmentation;
+
+    fn grapheme_len(value: &str) -> usize {
+        value.graphemes(true).count()
+    }
+
+    fn key_msg(code: KeyCode) -> Msg {
+        Box::new(KeyEvent::new(code, KeyModifiers::NONE))
+    }
+
+    fn focused_input(value: String, pos: usize) -> TextInput {
+        let (cursor, _) = Cursor::new().set_mode(CursorMode::Static);
+        let (input, _) = TextInput::new()
+            .set_cursor(cursor)
+            .set_value(value)
+            .set_pos(pos)
+            .focus();
+        input
+    }
+
+    #[derive(Clone, Debug)]
+    enum Op {
+        Left,
+        Right,
+        Backspace,
+        Delete,
+        Insert(char),
+    }
+
+    fn apply_ref(mut value: String, mut pos: usize, op: &Op) -> (String, usize) {
+        match op {
+            Op::Left => {
+                pos = pos.saturating_sub(1);
+            }
+            Op::Right => {
+                pos = std::cmp::min(pos.saturating_add(1), grapheme_len(&value));
+            }
+            Op::Backspace => {
+                if pos > 0 {
+                    let remove_at = pos.saturating_sub(1);
+                    value = remove_char(value, remove_at);
+                    pos = remove_at;
+                }
+            }
+            Op::Delete => {
+                if pos < grapheme_len(&value) {
+                    value = remove_char(value, pos);
+                }
+            }
+            Op::Insert(c) => {
+                value = insert_char(value, pos, *c);
+                pos = std::cmp::min(grapheme_len(&value), pos.saturating_add(1));
+            }
+        }
+        (value, pos)
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig {
+            fork: false,
+            .. ProptestConfig::default()
+        })]
+
+        #[test]
+        fn insert_then_backspace_restores_original(
+            value in proptest::string::string_regex("[ -~]*").expect("valid regex"),
+            at in any::<usize>(),
+            c in proptest::char::range(' ', '~'),
+        ) {
+            let len = grapheme_len(&value);
+            let index = if len == 0 { 0 } else { at % (len + 1) };
+            let input = focused_input(value.clone(), index);
+
+            let insert = key_msg(KeyCode::Char(c));
+            let (input, _) = input.update(&insert);
+
+            let backspace = key_msg(KeyCode::Backspace);
+            let (input, _) = input.update(&backspace);
+
+            prop_assert_eq!(input.value, value);
+            prop_assert_eq!(input.pos, index);
+        }
+
+        #[test]
+        fn char_input_on_focus_increases_grapheme_len(
+            value in proptest::string::string_regex("[ -~]*").expect("valid regex"),
+            at in any::<usize>(),
+            c in proptest::char::range(' ', '~'),
+        ) {
+            let before_len = grapheme_len(&value);
+            let index = if before_len == 0 { 0 } else { at % (before_len + 1) };
+            let input = focused_input(value, index);
+
+            let insert = key_msg(KeyCode::Char(c));
+            let (input, _) = input.update(&insert);
+
+            prop_assert_eq!(grapheme_len(&input.value), before_len + 1);
+            prop_assert_eq!(input.pos, index + 1);
+        }
+
+        #[test]
+        fn input_is_noop_when_not_focused(
+            value in proptest::string::string_regex("[ -~]*").expect("valid regex"),
+            at in any::<usize>(),
+            c in proptest::char::range(' ', '~'),
+        ) {
+            let len = grapheme_len(&value);
+            let index = if len == 0 { 0 } else { at % (len + 1) };
+            let input = TextInput::new().set_value(value.clone()).set_pos(index);
+
+            let insert = key_msg(KeyCode::Char(c));
+            let (updated, _) = input.update(&insert);
+
+            prop_assert_eq!(updated.value, value);
+            prop_assert_eq!(updated.pos, index);
+        }
+
+        #[test]
+        fn operation_sequence_matches_reference_model(
+            initial in proptest::string::string_regex("[ -~]*").expect("valid regex"),
+            at in any::<usize>(),
+            ops in proptest::collection::vec(
+                prop_oneof![
+                    Just(Op::Left),
+                    Just(Op::Right),
+                    Just(Op::Backspace),
+                    Just(Op::Delete),
+                    proptest::char::range(' ', '~').prop_map(Op::Insert),
+                ],
+                0..64
+            ),
+        ) {
+            let len = grapheme_len(&initial);
+            let index = if len == 0 { 0 } else { at % (len + 1) };
+
+            let mut input = focused_input(initial.clone(), index);
+            let mut expected_value = initial;
+            let mut expected_pos = index;
+
+            for op in &ops {
+                let msg = match op {
+                    Op::Left => key_msg(KeyCode::Left),
+                    Op::Right => key_msg(KeyCode::Right),
+                    Op::Backspace => key_msg(KeyCode::Backspace),
+                    Op::Delete => key_msg(KeyCode::Delete),
+                    Op::Insert(c) => key_msg(KeyCode::Char(*c)),
+                };
+                let (next, _) = input.update(&msg);
+                input = next;
+
+                (expected_value, expected_pos) = apply_ref(expected_value, expected_pos, op);
+            }
+
+            prop_assert_eq!(input.value.as_str(), expected_value.as_str());
+            prop_assert_eq!(input.pos, expected_pos);
+            prop_assert!(input.pos <= grapheme_len(&input.value));
         }
     }
 }
