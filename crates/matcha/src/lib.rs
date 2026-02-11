@@ -444,6 +444,11 @@ impl<M: Model> Program<M> {
             #[cfg(feature = "tracing")]
             tracing::trace!("re-rendered");
 
+            // Skip terminal clear/print when frame output is unchanged.
+            if current_view == prev_view {
+                continue;
+            }
+
             if self.alt_screen {
                 self.term.clear_all()?;
             } else {

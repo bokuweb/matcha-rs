@@ -440,30 +440,30 @@ impl<M: Model> Model for Viewport<M> {
             child: new_child,
             ..self
         };
-        let (new_self, cmd): (Self, Option<Cmd>) = if let Some(event) = msg.downcast_ref::<KeyEvent>()
-        {
-            let key = new_self.key_bindings.0.get(matcha::Key::from(event));
-            let new_self = match key {
-                Some(ViewportKeys::Down) => new_self.move_down(),
-                Some(ViewportKeys::Up) => new_self.move_up(),
-                Some(ViewportKeys::PageDown) => new_self.page_down(),
-                Some(ViewportKeys::PageUp) => new_self.page_up(),
-                _ => new_self,
-            };
+        let (new_self, cmd): (Self, Option<Cmd>) =
+            if let Some(event) = msg.downcast_ref::<KeyEvent>() {
+                let key = new_self.key_bindings.0.get(matcha::Key::from(event));
+                let new_self = match key {
+                    Some(ViewportKeys::Down) => new_self.move_down(),
+                    Some(ViewportKeys::Up) => new_self.move_up(),
+                    Some(ViewportKeys::PageDown) => new_self.page_down(),
+                    Some(ViewportKeys::PageUp) => new_self.page_up(),
+                    _ => new_self,
+                };
 
-            #[cfg(feature = "tracing")]
-            tracing::trace!("selection_y = {}", old_selection_y);
+                #[cfg(feature = "tracing")]
+                tracing::trace!("selection_y = {}", old_selection_y);
 
-            if new_self.selection && old_selection_y != new_self.selection_y {
-                let index = new_self.selection_y;
-                let cmd = Cmd::sync(Box::new(move || Box::new(ViewportOnSelectMsg { index })));
-                (new_self, Some(cmd))
+                if new_self.selection && old_selection_y != new_self.selection_y {
+                    let index = new_self.selection_y;
+                    let cmd = Cmd::sync(Box::new(move || Box::new(ViewportOnSelectMsg { index })));
+                    (new_self, Some(cmd))
+                } else {
+                    (new_self, None)
+                }
             } else {
                 (new_self, None)
-            }
-        } else {
-            (new_self, None)
-        };
+            };
         if let Some(c) = cmd {
             commands.push(c);
         }
