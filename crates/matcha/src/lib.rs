@@ -193,6 +193,8 @@ pub struct Program<M> {
     alt_screen: bool,
     /// terminal
     term: Box<dyn Termable>,
+    /// optional external input channel (for tests/adapters)
+    input_rx: Option<mpsc::Receiver<Msg>>,
 }
 
 /// batchMsg is the internal message used to perform a bunch of commands. You
@@ -253,6 +255,7 @@ impl<M: Model> Program<M> {
             size: (w, h),
             alt_screen: false,
             term: Box::new(term),
+            input_rx: None,
         }
     }
 
@@ -267,7 +270,16 @@ impl<M: Model> Program<M> {
             size: (w, h),
             alt_screen: false,
             term,
+            input_rx: None,
         }
+    }
+
+    /// Override event input stream with external message receiver.
+    ///
+    /// This is mainly intended for integration tests and terminal adapters.
+    pub fn with_input_receiver(mut self, rx: mpsc::Receiver<Msg>) -> Self {
+        self.input_rx = Some(rx);
+        self
     }
 
     /// Enable alternate screen buffer from the start.
@@ -309,38 +321,57 @@ impl<M: Model> Program<M> {
 
         let (shutdown_tx, mut shutdown_rx) = oneshot::channel();
 
-        let mut reader = EventStream::new();
-
         let event_tx = msg_tx.clone();
 
-        let input_handle = tokio::spawn(async move {
-            loop {
-                let event = reader.next().fuse();
-
-                #[cfg(feature = "tracing")]
-                tracing::trace!("event {:?} recieved", &event);
-
-                tokio::select! {
-                    maybe_event = event => {
-                        let res = match maybe_event {
-                            Some(Ok(Event::Key(event))) => event_tx.send(Box::new(event)).await,
-                            Some(Ok(Event::Mouse(event))) => event_tx.send(Box::new(event)).await,
-                            Some(Ok(Event::Resize(x, y))) => event_tx.send(Box::new(ResizeEvent(x, y))).await,
-                            _ => Ok(()),
-                        };
-                        if res.is_err() {
-                            #[cfg(feature = "tracing")]
-                            tracing::error!("event {:?} recieved", res);
-                            return;
+        let input_handle = if let Some(mut input_rx) = self.input_rx.take() {
+            tokio::spawn(async move {
+                loop {
+                    tokio::select! {
+                        maybe_msg = input_rx.recv() => {
+                            match maybe_msg {
+                                Some(msg) => {
+                                    if event_tx.send(msg).await.is_err() {
+                                        return;
+                                    }
+                                }
+                                None => return,
+                            }
                         }
-                    },
-                    _ = (&mut shutdown_rx) => {
-                        // shutdown loop if oneshot emitted.
-                        return;
+                        _ = (&mut shutdown_rx) => return,
                     }
                 }
-            }
-        });
+            })
+        } else {
+            let mut reader = EventStream::new();
+            tokio::spawn(async move {
+                loop {
+                    let event = reader.next().fuse();
+
+                    #[cfg(feature = "tracing")]
+                    tracing::trace!("event {:?} recieved", &event);
+
+                    tokio::select! {
+                        maybe_event = event => {
+                            let res = match maybe_event {
+                                Some(Ok(Event::Key(event))) => event_tx.send(Box::new(event)).await,
+                                Some(Ok(Event::Mouse(event))) => event_tx.send(Box::new(event)).await,
+                                Some(Ok(Event::Resize(x, y))) => event_tx.send(Box::new(ResizeEvent(x, y))).await,
+                                _ => Ok(()),
+                            };
+                            if res.is_err() {
+                                #[cfg(feature = "tracing")]
+                                tracing::error!("event {:?} recieved", res);
+                                return;
+                            }
+                        },
+                        _ = (&mut shutdown_rx) => {
+                            // shutdown loop if oneshot emitted.
+                            return;
+                        }
+                    }
+                }
+            })
+        };
 
         // clone sender for executor
         let exec_tx = msg_tx.clone();
@@ -466,7 +497,7 @@ impl<M: Model> Program<M> {
         tracing::trace!("clean up program");
 
         message_handle.abort();
-        shutdown_tx.send(true).unwrap();
+        let _ = shutdown_tx.send(true);
         input_handle.abort();
 
         self.term.show_cursor()?;
@@ -485,3 +516,93 @@ impl<M: Model> Program<M> {
 /// Event representing a terminal resize (x, y).
 /// Boxed as a message so it can be sent to the application.
 pub struct ResizeEvent(pub u16, pub u16);
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        fmt::Display,
+        sync::{Arc, Mutex},
+    };
+    use tokio::sync::mpsc;
+
+    use crate::{quit, Cmd, Extensions, KeyCode, KeyEvent, KeyModifiers, Model, Msg, Program, Termable};
+
+    struct FakeTerminal {
+        printed: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl FakeTerminal {
+        fn new(printed: Arc<Mutex<Vec<String>>>) -> Self {
+            Self { printed }
+        }
+    }
+
+    impl Termable for FakeTerminal {
+        fn size(&self) -> Result<(u16, u16), std::io::Error> {
+            Ok((80, 24))
+        }
+        fn hide_cursor(&self) -> Result<(), std::io::Error> { Ok(()) }
+        fn show_cursor(&self) -> Result<(), std::io::Error> { Ok(()) }
+        fn enable_raw_mode(&self) -> Result<(), std::io::Error> { Ok(()) }
+        fn disable_raw_mode(&self) -> Result<(), std::io::Error> { Ok(()) }
+        fn print(&self, v: &str) -> Result<(), std::io::Error> {
+            self.printed.lock().unwrap().push(v.to_string());
+            Ok(())
+        }
+        fn enter_alt_screen(&self) -> Result<(), std::io::Error> { Ok(()) }
+        fn leave_alt_screen(&self) -> Result<(), std::io::Error> { Ok(()) }
+        fn enable_mouse_capture(&self) -> Result<(), std::io::Error> { Ok(()) }
+        fn disable_mouse_capture(&self) -> Result<(), std::io::Error> { Ok(()) }
+        fn move_to_column(&self, _y: u16) -> Result<(), std::io::Error> { Ok(()) }
+        fn move_to(&self, _x: u16, _y: u16) -> Result<(), std::io::Error> { Ok(()) }
+        fn cursor_position(&self) -> Result<(u16, u16), std::io::Error> { Ok((0, 0)) }
+        fn clear_all(&self) -> Result<(), std::io::Error> { Ok(()) }
+        fn clear_current_line(&self) -> Result<(), std::io::Error> { Ok(()) }
+        fn clear_current_line_and_move_previous(&self) -> Result<(), std::io::Error> { Ok(()) }
+    }
+
+    struct TestModel {
+        seen: String,
+    }
+
+    #[async_trait::async_trait]
+    impl Model for TestModel {
+        fn update(mut self, msg: &Msg) -> (Self, Option<Cmd>) {
+            if let Some(key) = msg.downcast_ref::<KeyEvent>() {
+                if let KeyCode::Char(ch) = key.code {
+                    self.seen.push(ch);
+                    if ch == 'q' {
+                        return (self, Some(Cmd::sync(Box::new(quit))));
+                    }
+                }
+            }
+            (self, None)
+        }
+
+        fn view(&self) -> impl Display {
+            self.seen.clone()
+        }
+    }
+
+    #[tokio::test]
+    async fn program_can_run_with_external_input_receiver() {
+        let printed = Arc::new(Mutex::new(Vec::<String>::new()));
+        let term = FakeTerminal::new(printed.clone());
+        let (tx, rx) = mpsc::channel::<Msg>(8);
+
+        tx.send(Box::new(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE)))
+            .await
+            .unwrap();
+        tx.send(Box::new(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE)))
+            .await
+            .unwrap();
+        drop(tx);
+
+        let p = Program::new_with_terminal(TestModel { seen: String::new() }, Extensions::default(), Box::new(term))
+            .with_input_receiver(rx);
+        p.start().await.unwrap();
+
+        let out = printed.lock().unwrap();
+        assert!(!out.is_empty(), "program should render at least once");
+    }
+}

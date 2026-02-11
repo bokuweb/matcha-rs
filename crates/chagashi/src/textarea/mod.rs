@@ -278,7 +278,12 @@ impl Inner {
             return format!("{}", self.cursor.view()) + &tail;
         }
 
-        if cursor_x < s.len() {
+        // IMPORTANT:
+        // `cursor_x` is a grapheme index, while `s.len()` is byte length.
+        // Comparing them causes incorrect "cursor is inside line" detection for multibyte text.
+        // As a result, the last grapheme can be replaced by the cursor on Japanese text.
+        let grapheme_len = s.graphemes(true).count();
+        if cursor_x < grapheme_len {
             let (head, tail) = split_at(s, cursor_x);
             let tail = if tail.is_empty() {
                 tail
@@ -537,5 +542,33 @@ impl Model for Inner {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
     fn view(&self) -> impl Display {
         self.render_rows()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn render_row_keeps_last_grapheme_for_multibyte_text_when_cursor_is_at_end() {
+        let line =
+            "4　法第15条の2第2項及び第3項に規定する条例で定める書類は、第2項第2号から第4号まで";
+        let base = Inner::with_content(line.to_string()).size(120, 1);
+        let row = base.document.row(0).expect("row");
+        let row_len = row.len();
+        let cursor_position = Position::new(row_len, 0);
+        let cursor = Inner::set_cursor_char(cursor_position, base.cursor, base.document.rows());
+        let inner = Inner {
+            focus: true,
+            cursor_position,
+            cursor,
+            ..base
+        };
+
+        let rendered = inner.render_row(inner.document.row(0).expect("row"), 0);
+        assert!(
+            rendered.contains(line),
+            "multibyte tail must not be dropped when cursor is at line end"
+        );
     }
 }
