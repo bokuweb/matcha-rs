@@ -110,7 +110,10 @@ mod tests {
     }
 
     fn doc_from_strings(rows: &[String]) -> Document {
-        let rows = rows.iter().map(|s| Row::from(s.as_str())).collect::<Vec<_>>();
+        let rows = rows
+            .iter()
+            .map(|s| Row::from(s.as_str()))
+            .collect::<Vec<_>>();
         Document::with_rows(rows)
     }
 
