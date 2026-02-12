@@ -319,15 +319,7 @@ impl<M: Model> Viewport<M> {
 
     /// Right-pads the segment with spaces to match the viewport width.
     fn pad_to_width(&self, segment: &str) -> String {
-        let len = segment.len() as u16;
-        let padding = self.width.saturating_sub(len) as usize;
-        if padding == 0 {
-            return segment.to_string();
-        }
-        let mut result = String::with_capacity(segment.len() + padding);
-        result.push_str(segment);
-        result.push_str(&" ".repeat(padding));
-        result
+        matcha::fill_by_space(segment.to_string(), self.width)
     }
 
     /// Applies the configured selection colors to the given text.
@@ -492,6 +484,7 @@ mod tests {
     use super::*;
     use matcha::{style, Color};
     use proptest::prelude::*;
+    use unicode_width::UnicodeWidthStr;
 
     #[derive(Clone)]
     struct StaticModel(String);
@@ -544,6 +537,27 @@ mod tests {
             .on(selection_bg)
             .to_string();
         assert_eq!(lines[1], expected);
+    }
+
+    #[test]
+    fn lines_highlight_selected_line_with_ansi_fills_to_width() {
+        let selection_fg = Color::White;
+        let selection_bg = Color::Blue;
+        let opt = ViewportOption {
+            selection: true,
+            selection_fg,
+            selection_bg,
+            ..ViewportOption::default()
+        };
+        let ansi_line = "\x1b[31mdiff --git a/a b/a\x1b[0m";
+        let viewport = build_viewport(opt, &format!("x\n{}", ansi_line), (30, 2)).move_down();
+        let lines = viewport.lines();
+        let selected = matcha::remove_escape_sequences(&lines[1]);
+        assert_eq!(
+            selected.width(),
+            30,
+            "selected line should fill viewport width"
+        );
     }
 
     #[test]
