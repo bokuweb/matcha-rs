@@ -197,7 +197,10 @@ impl<M: Model> Viewport<M> {
     pub fn move_down(self) -> Self {
         if self.selection {
             if self.selection_y >= (self.offset_y + self.height).saturating_sub(1) {
-                let offset_y = std::cmp::min(self.offset_y + self.height / 2, self.max_y_offset());
+                let offset_y = std::cmp::min(
+                    self.offset_y.saturating_add(self.height / 2),
+                    self.max_y_offset(),
+                );
                 return Self {
                     offset_y,
                     selection_y: std::cmp::min(
@@ -241,12 +244,12 @@ impl<M: Model> Viewport<M> {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
     /// Scroll down by one page.
     pub fn page_down(self) -> Self {
-        if self.offset_y + self.height >= self.content_len().saturating_sub(1) {
+        if self.offset_y.saturating_add(self.height) >= self.content_len().saturating_sub(1) {
             return self;
         }
 
         let y = std::cmp::min(
-            self.offset_y + self.height,
+            self.offset_y.saturating_add(self.height),
             self.content_len().saturating_sub(1),
         );
         Self {
@@ -376,12 +379,13 @@ impl<M: Model> Viewport<M> {
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
     fn visible_lines(&self) -> Vec<String> {
-        let top = std::cmp::max(0, self.offset_y) as usize;
-        let over = self.content_len() - self.offset_y > self.height;
+        let content_len = self.content_len();
+        let top = self.offset_y.min(content_len) as usize;
+        let over = content_len.saturating_sub(self.offset_y) > self.height;
         let bottom = if over {
-            (self.offset_y + self.height) as usize
+            self.offset_y.saturating_add(self.height).min(content_len) as usize
         } else {
-            self.content_len() as usize
+            content_len as usize
         };
         let mut lines: Vec<String> = self.lines()[top..bottom]
             .iter()
@@ -390,9 +394,10 @@ impl<M: Model> Viewport<M> {
 
         // if not overed, fill with \n to keep height.
         if !over {
+            let visible_count = (bottom - top) as u16;
             lines.extend(
                 std::iter::repeat(String::new())
-                    .take(self.height.saturating_sub(self.content_len()) as usize),
+                    .take(self.height.saturating_sub(visible_count) as usize),
             );
         }
         lines
@@ -550,5 +555,12 @@ mod tests {
         let key_event: Msg = Box::new(KeyEvent::new(KeyCode::Down, KeyModifiers::empty()));
         let (_, cmd) = viewport.update(&key_event);
         assert!(cmd.is_none());
+    }
+
+    #[test]
+    fn visible_lines_does_not_panic_when_offset_exceeds_content() {
+        let mut viewport = build_viewport(ViewportOption::default(), "a\nb", (3, 2));
+        viewport.offset_y = u16::MAX;
+        assert_eq!(viewport.visible_lines(), vec![String::new(), String::new()]);
     }
 }
