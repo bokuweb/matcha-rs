@@ -491,22 +491,19 @@ impl<M: Model> Model for Viewport<M> {
 mod tests {
     use super::*;
     use matcha::{style, Color};
+    use proptest::prelude::*;
 
     #[derive(Clone)]
-    struct StaticModel(&'static str);
+    struct StaticModel(String);
 
     impl Model for StaticModel {
         fn view(&self) -> impl Display {
-            self.0.to_string()
+            self.0.clone()
         }
     }
 
-    fn build_viewport(
-        opt: ViewportOption,
-        view: &'static str,
-        size: (u16, u16),
-    ) -> Viewport<StaticModel> {
-        Viewport::new(StaticModel(view), size, opt)
+    fn build_viewport(opt: ViewportOption, view: &str, size: (u16, u16)) -> Viewport<StaticModel> {
+        Viewport::new(StaticModel(view.to_string()), size, opt)
     }
 
     #[test]
@@ -562,5 +559,117 @@ mod tests {
         let mut viewport = build_viewport(ViewportOption::default(), "a\nb", (3, 2));
         viewport.offset_y = u16::MAX;
         assert_eq!(viewport.visible_lines(), vec![String::new(), String::new()]);
+    }
+
+    fn join_lines(lines: &[String]) -> String {
+        lines.join("\n")
+    }
+
+    proptest! {
+        #[test]
+        fn prop_visible_lines_len_always_matches_height(
+            width in 1u16..80,
+            height in 1u16..40,
+            lines in prop::collection::vec("[ -~]{0,40}", 0..60),
+            random_offset in any::<u16>(),
+        ) {
+            let content = join_lines(&lines);
+            let mut viewport = Viewport::new(
+                StaticModel(content),
+                (width, height),
+                ViewportOption::default(),
+            );
+            viewport.offset_y = random_offset;
+
+            prop_assert_eq!(viewport.visible_lines().len(), height as usize);
+        }
+
+        #[test]
+        fn prop_move_down_never_exceeds_max_offset(
+            width in 1u16..60,
+            height in 1u16..30,
+            lines in prop::collection::vec("[ -~]{0,30}", 0..80),
+            steps in 0usize..300,
+        ) {
+            let content = join_lines(&lines);
+            let mut viewport = Viewport::new(
+                StaticModel(content),
+                (width, height),
+                ViewportOption::default(),
+            );
+
+            for _ in 0..steps {
+                viewport = viewport.move_down();
+                prop_assert!(viewport.offset_y <= viewport.max_y_offset());
+            }
+        }
+
+        #[test]
+        fn prop_update_content_keeps_offset_within_content_len(
+            width in 1u16..60,
+            height in 1u16..30,
+            initial_lines in prop::collection::vec("[ -~]{0,30}", 0..80),
+            next_lines in prop::collection::vec("[ -~]{0,30}", 0..40),
+            steps in 0usize..200,
+        ) {
+            let initial = join_lines(&initial_lines);
+            let next = join_lines(&next_lines);
+
+            let mut viewport = Viewport::new(
+                StaticModel(initial),
+                (width, height),
+                ViewportOption::default(),
+            );
+            for _ in 0..steps {
+                viewport = viewport.move_down();
+            }
+
+            let viewport = viewport.update_content(StaticModel(next));
+            prop_assert!(viewport.offset_y <= viewport.content_len().saturating_sub(1));
+        }
+
+        #[test]
+        fn prop_page_down_offset_is_monotonic(
+            width in 1u16..60,
+            height in 1u16..30,
+            lines in prop::collection::vec("[ -~]{0,30}", 0..120),
+            steps in 0usize..120,
+        ) {
+            let content = join_lines(&lines);
+            let mut viewport = Viewport::new(
+                StaticModel(content),
+                (width, height),
+                ViewportOption::default(),
+            );
+            let mut prev = viewport.offset_y;
+
+            for _ in 0..steps {
+                viewport = viewport.page_down();
+                prop_assert!(viewport.offset_y >= prev);
+                prop_assert!(viewport.offset_y <= viewport.content_len().saturating_sub(1));
+                prev = viewport.offset_y;
+            }
+        }
+
+        #[test]
+        fn prop_selection_cursor_stays_in_bounds_on_move_down(
+            width in 1u16..60,
+            height in 1u16..30,
+            lines in prop::collection::vec("[ -~]{0,30}", 1..120),
+            steps in 0usize..300,
+        ) {
+            let content = join_lines(&lines);
+            let opt = ViewportOption {
+                selection: true,
+                ..ViewportOption::default()
+            };
+            let mut viewport = Viewport::new(StaticModel(content), (width, height), opt);
+
+            for _ in 0..steps {
+                viewport = viewport.move_down();
+                prop_assert!(viewport.selection_y <= viewport.content_len().saturating_sub(1));
+                prop_assert!(viewport.offset_y <= viewport.max_y_offset());
+            }
+        }
     }
 }
