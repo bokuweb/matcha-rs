@@ -12,7 +12,7 @@ use std::fmt::Display;
 use unicode_segmentation::UnicodeSegmentation;
 
 use document::Document;
-use matcha::{key, Cmd, InitInput, KeyCode, KeyEvent, Model};
+use matcha::{key, style, Cmd, Color, InitInput, KeyCode, KeyEvent, Model, Stylize};
 use position::Position;
 use row::Row;
 
@@ -128,6 +128,20 @@ impl Textarea {
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Toggle line number visibility.
+    pub fn show_line_numbers(self, show: bool) -> Self {
+        let child = self.0.child.show_line_numbers(show);
+        Self(Borderize { child, ..self.0 })
+    }
+
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Highlight rows that start with `#`.
+    pub fn highlight_comment_lines(self, enabled: bool) -> Self {
+        let child = self.0.child.highlight_comment_lines(enabled);
+        Self(Borderize { child, ..self.0 })
+    }
+
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
     /// Focus the textarea (enables editing) and starts cursor blinking.
     pub fn focus(self) -> (Self, Option<Cmd>) {
         let (child, cmd) = self.0.child.focus();
@@ -164,6 +178,8 @@ pub struct Inner {
     offset: Position,
     cursor_position: Position,
     key_bindings: Keybindings,
+    show_line_numbers: bool,
+    highlight_comment_lines: bool,
 }
 
 impl Default for Inner {
@@ -178,11 +194,31 @@ impl Default for Inner {
             offset: Position::new(0, 0),
             cursor_position: Position::new(0, 0),
             key_bindings: Keybindings::default(),
+            show_line_numbers: true,
+            highlight_comment_lines: false,
         }
     }
 }
 
 impl Inner {
+    fn is_comment_line(&self, row: &Row) -> bool {
+        self.highlight_comment_lines && row.as_str().trim_start().starts_with('#')
+    }
+
+    fn maybe_style_comment_line(&self, row: &Row, line: String) -> String {
+        if self.is_comment_line(row) {
+            style(line)
+                .with(Color::Rgb {
+                    r: 122,
+                    g: 130,
+                    b: 146,
+                })
+                .to_string()
+        } else {
+            line
+        }
+    }
+
     /// Create a new empty inner textarea model.
     pub fn new() -> Self {
         Default::default()
@@ -208,6 +244,24 @@ impl Inner {
     /// Set the inner textarea height.
     pub fn height(self, height: u16) -> Self {
         Self { height, ..self }
+    }
+
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Toggle line number visibility.
+    pub fn show_line_numbers(self, show: bool) -> Self {
+        Self {
+            show_line_numbers: show,
+            ..self
+        }
+    }
+
+    #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
+    /// Highlight rows that start with `#`.
+    pub fn highlight_comment_lines(self, enabled: bool) -> Self {
+        Self {
+            highlight_comment_lines: enabled,
+            ..self
+        }
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
@@ -258,24 +312,25 @@ impl Inner {
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
     fn render_row(&self, row: &Row, index: usize) -> String {
         let start = self.offset.x;
+        let line_number_width = if self.show_line_numbers { 4 } else { 0 };
         // sub numbering
         let end = self
             .offset
             .x
             .saturating_add(self.width as usize)
             // line number
-            .saturating_sub(4);
+            .saturating_sub(line_number_width);
 
         let s = row.render(start, end);
         if self.cursor_position.y != index {
-            return s;
+            return self.maybe_style_comment_line(row, s);
         }
 
         let cursor_x = self.cursor_position.x.saturating_sub(start);
 
         if cursor_x == 0 {
             let (_, tail) = split_at(s, 1);
-            return format!("{}", self.cursor.view()) + &tail;
+            return self.maybe_style_comment_line(row, format!("{}", self.cursor.view()) + &tail);
         }
 
         // IMPORTANT:
@@ -291,14 +346,16 @@ impl Inner {
                 let (_, tail) = split_at(tail, 1);
                 tail
             };
-            return head + &format!("{}", self.cursor.view()) + &tail;
+            return self
+                .maybe_style_comment_line(row, head + &format!("{}", self.cursor.view()) + &tail);
         }
 
-        if self.focus {
+        let rendered = if self.focus {
             s + &format!("{}", self.cursor.view())
         } else {
             s
-        }
+        };
+        self.maybe_style_comment_line(row, rendered)
     }
 
     #[cfg_attr(feature = "tracing", tracing::instrument(skip_all))]
@@ -309,10 +366,14 @@ impl Inner {
             let mut s = String::default();
             let n = self.offset.y.saturating_add(row as usize);
             if let Some(row) = self.document.row(n) {
-                s += &format!("{:>3} ", n.saturating_add(1));
+                if self.show_line_numbers {
+                    s += &format!("{:>3} ", n.saturating_add(1));
+                }
                 s += &self.render_row(row, n);
-            } else {
+            } else if self.show_line_numbers {
                 s += &format!("{:>1} ~", " ");
+            } else {
+                s.push('~');
             }
             rows.push(s);
         }
@@ -569,6 +630,28 @@ mod tests {
         assert!(
             rendered.contains(line),
             "multibyte tail must not be dropped when cursor is at line end"
+        );
+    }
+
+    #[test]
+    fn render_rows_can_hide_line_numbers() {
+        let inner = Inner::with_content("alpha\nbeta")
+            .show_line_numbers(false)
+            .size(20, 2);
+        let rendered = inner.render_rows();
+        assert!(!rendered.contains("  1 "), "line numbers should be hidden");
+        assert!(rendered.contains("alpha"));
+    }
+
+    #[test]
+    fn render_rows_highlight_comment_lines() {
+        let inner = Inner::with_content("# comment\nbody")
+            .highlight_comment_lines(true)
+            .size(20, 2);
+        let rendered = inner.render_rows();
+        assert!(
+            rendered.contains('\u{1b}'),
+            "comment lines should include ANSI style sequences"
         );
     }
 }
