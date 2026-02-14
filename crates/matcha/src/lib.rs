@@ -418,85 +418,89 @@ impl<M: Model> Program<M> {
         // initial rendering
         self.term.hide_cursor()?;
         self.term.enable_raw_mode()?;
-        if self.alt_screen {
+        let used_alt_screen = self.alt_screen;
+        if used_alt_screen {
             self.term.enter_alt_screen()?;
             self.term.clear_all()?;
         }
-        let mut prev_view = formatter::format(self.model.view(), self.size);
-        self.term.print(&prev_view)?;
+        let run_result: anyhow::Result<()> = async {
+            let mut prev_view = formatter::format(self.model.view(), self.size);
+            self.term.print(&prev_view)?;
 
-        // main loop
-        let mut rx = msg_rx;
+            // main loop
+            let mut rx = msg_rx;
+            loop {
+                let msg = rx.recv().await.unwrap();
 
-        loop {
-            let msg = rx.recv().await.unwrap();
-
-            #[cfg(feature = "tracing")]
-            let span = tracing::info_span!("handle_message");
-            #[cfg(feature = "tracing")]
-            let _guard = span.enter();
-
-            if msg.is::<QuitMsg>() {
-                break;
-            }
-
-            if msg.is::<BatchMsg>() {
-                if let Ok(batch) = msg.downcast::<BatchMsg>() {
-                    for cmd in batch.into_iter() {
-                        cmd_tx.send(cmd).await.unwrap();
-                    }
-                }
-                continue;
-            }
-
-            if let Some(event) = msg.downcast_ref::<ResizeEvent>() {
                 #[cfg(feature = "tracing")]
-                tracing::trace!("resize event recieved w = {}, h = {}", event.0, event.1);
-                self.size = (event.0, event.1);
-            }
+                let span = tracing::info_span!("handle_message");
+                #[cfg(feature = "tracing")]
+                let _guard = span.enter();
 
-            if msg.is::<EnterAltScreenMsg>() {
-                self.alt_screen = true;
-                self.term.enter_alt_screen()?;
-                self.term.clear_all()?;
-            }
-
-            let (m, cmd) = self.model.update(&msg);
-            self.model = m;
-
-            if let Some(cmd) = cmd {
-                if cmd_tx.send(cmd).await.is_err() {
+                if msg.is::<QuitMsg>() {
                     break;
                 }
-            }
 
-            let current_view = formatter::format(self.model.view(), self.size);
+                if msg.is::<BatchMsg>() {
+                    if let Ok(batch) = msg.downcast::<BatchMsg>() {
+                        for cmd in batch.into_iter() {
+                            cmd_tx.send(cmd).await.unwrap();
+                        }
+                    }
+                    continue;
+                }
 
-            #[cfg(feature = "tracing")]
-            tracing::trace!("re-rendered");
+                if let Some(event) = msg.downcast_ref::<ResizeEvent>() {
+                    #[cfg(feature = "tracing")]
+                    tracing::trace!("resize event recieved w = {}, h = {}", event.0, event.1);
+                    self.size = (event.0, event.1);
+                }
 
-            // Skip terminal clear/print when frame output is unchanged.
-            if current_view == prev_view {
-                continue;
-            }
+                if msg.is::<EnterAltScreenMsg>() {
+                    self.alt_screen = true;
+                    self.term.enter_alt_screen()?;
+                    self.term.clear_all()?;
+                }
 
-            if self.alt_screen {
-                self.term.clear_all()?;
-            } else {
-                self.term.move_to_column(0)?;
-                if prev_view.matches("\r\n").count() == 0 {
-                    self.term.clear_current_line()?;
-                } else {
-                    self.term.clear_current_line()?;
-                    for _ in 0..prev_view.matches("\r\n").count() {
-                        self.term.clear_current_line_and_move_previous()?;
+                let (m, cmd) = self.model.update(&msg);
+                self.model = m;
+
+                if let Some(cmd) = cmd {
+                    if cmd_tx.send(cmd).await.is_err() {
+                        break;
                     }
                 }
-            }
 
-            self.term.print(&current_view)?;
-            prev_view = current_view;
+                let current_view = formatter::format(self.model.view(), self.size);
+
+                #[cfg(feature = "tracing")]
+                tracing::trace!("re-rendered");
+
+                // Skip terminal clear/print when frame output is unchanged.
+                if current_view == prev_view {
+                    continue;
+                }
+
+                if self.alt_screen {
+                    self.term.clear_all()?;
+                } else {
+                    self.term.move_to_column(0)?;
+                    if prev_view.matches("\r\n").count() == 0 {
+                        self.term.clear_current_line()?;
+                    } else {
+                        self.term.clear_current_line()?;
+                        for _ in 0..prev_view.matches("\r\n").count() {
+                            self.term.clear_current_line_and_move_previous()?;
+                        }
+                    }
+                }
+
+                self.term.print(&current_view)?;
+                prev_view = current_view;
+            }
+            Ok(())
         }
+        .await;
 
         #[cfg(feature = "tracing")]
         tracing::trace!("clean up program");
@@ -505,15 +509,31 @@ impl<M: Model> Program<M> {
         let _ = shutdown_tx.send(true);
         input_handle.abort();
 
-        self.term.show_cursor()?;
-        self.term.disable_mouse_capture()?;
+        let cleanup_result = Self::cleanup_terminal(self.term.as_ref(), used_alt_screen);
+        run_result.and(cleanup_result)
+    }
 
-        if self.alt_screen {
-            self.term.leave_alt_screen()?;
+    fn cleanup_terminal(term: &dyn Termable, used_alt_screen: bool) -> anyhow::Result<()> {
+        let mut first_error = None;
+        let mut record = |result: Result<(), std::io::Error>, label: &str| {
+            if let Err(error) = result {
+                if first_error.is_none() {
+                    first_error = Some(anyhow::anyhow!("failed to {}: {}", label, error));
+                }
+            }
+        };
+
+        // Prioritize raw-mode restoration so Ctrl+C works again.
+        record(term.disable_raw_mode(), "disable raw mode");
+        record(term.show_cursor(), "show cursor");
+        record(term.disable_mouse_capture(), "disable mouse capture");
+        if used_alt_screen {
+            record(term.leave_alt_screen(), "leave alternate screen");
         }
 
-        self.term.disable_raw_mode()?;
-
+        if let Some(error) = first_error {
+            return Err(error);
+        }
         Ok(())
     }
 }
@@ -651,5 +671,116 @@ mod tests {
 
         let out = printed.lock().unwrap();
         assert!(!out.is_empty(), "program should render at least once");
+    }
+
+    struct FailingCleanupTerminal {
+        calls: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl FailingCleanupTerminal {
+        fn new(calls: Arc<Mutex<Vec<String>>>) -> Self {
+            Self { calls }
+        }
+
+        fn record_call(&self, name: &str) {
+            self.calls.lock().unwrap().push(name.to_string());
+        }
+    }
+
+    impl Termable for FailingCleanupTerminal {
+        fn size(&self) -> Result<(u16, u16), std::io::Error> {
+            Ok((80, 24))
+        }
+
+        fn hide_cursor(&self) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+
+        fn show_cursor(&self) -> Result<(), std::io::Error> {
+            self.record_call("show_cursor");
+            Err(std::io::Error::other("show cursor failed"))
+        }
+
+        fn enable_raw_mode(&self) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+
+        fn disable_raw_mode(&self) -> Result<(), std::io::Error> {
+            self.record_call("disable_raw_mode");
+            Ok(())
+        }
+
+        fn print(&self, _v: &str) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+
+        fn enter_alt_screen(&self) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+
+        fn leave_alt_screen(&self) -> Result<(), std::io::Error> {
+            self.record_call("leave_alt_screen");
+            Ok(())
+        }
+
+        fn enable_mouse_capture(&self) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+
+        fn disable_mouse_capture(&self) -> Result<(), std::io::Error> {
+            self.record_call("disable_mouse_capture");
+            Ok(())
+        }
+
+        fn move_to_column(&self, _y: u16) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+
+        fn move_to(&self, _x: u16, _y: u16) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+
+        fn cursor_position(&self) -> Result<(u16, u16), std::io::Error> {
+            Ok((0, 0))
+        }
+
+        fn clear_all(&self) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+
+        fn clear_current_line(&self) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+
+        fn clear_current_line_and_move_previous(&self) -> Result<(), std::io::Error> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn cleanup_terminal_attempts_raw_mode_restore_even_if_other_steps_fail() {
+        let calls = Arc::new(Mutex::new(vec![]));
+        let term = FailingCleanupTerminal::new(calls.clone());
+
+        let result = Program::<TestModel>::cleanup_terminal(&term, true);
+
+        assert!(
+            result.is_err(),
+            "cleanup should report first encountered error"
+        );
+        let calls = calls.lock().unwrap();
+        assert_eq!(
+            calls.first().map(String::as_str),
+            Some("disable_raw_mode"),
+            "raw mode should be restored first"
+        );
+        assert!(
+            calls.iter().any(|call| call == "disable_mouse_capture"),
+            "cleanup should continue after failures"
+        );
+        assert!(
+            calls.iter().any(|call| call == "leave_alt_screen"),
+            "alt-screen cleanup should still be attempted"
+        );
     }
 }
