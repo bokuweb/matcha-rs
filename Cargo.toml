@@ -15,7 +15,6 @@ chagashi = { path = "crates/chagashi", version = "0.1.0" }
 # External dependencies (versions centralized here)
 crossterm = "0.27"
 tokio = "1"
-async-trait = "0.1"
 anyhow = "1"
 unicode-segmentation = "1.11.0"
 unicode-width = "0.1.5"

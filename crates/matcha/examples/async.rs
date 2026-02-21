@@ -20,7 +20,6 @@ struct App {
     done: bool,
 }
 
-#[async_trait::async_trait]
 impl Model for App {
     fn init(self, _input: &InitInput) -> (Self, Option<Cmd>) {
         (self, Some(matcha::r#async!(init())))
@@ -46,13 +45,18 @@ impl Model for App {
         }
     }
 
-    async fn execute(_ext: Extensions, AsyncCmd(cmd): AsyncCmd) -> Option<Cmd> {
-        let msg = cmd();
-        if msg.downcast_ref::<AsyncMsg>().is_some() {
-            tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-            return Some(matcha::sync!(done()));
+    fn execute(
+        _ext: Extensions,
+        AsyncCmd(cmd): AsyncCmd,
+    ) -> impl std::future::Future<Output = Option<Cmd>> + Send {
+        async move {
+            let msg = cmd();
+            if msg.downcast_ref::<AsyncMsg>().is_some() {
+                tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+                return Some(matcha::sync!(done()));
+            }
+            None
         }
-        None
     }
 }
 

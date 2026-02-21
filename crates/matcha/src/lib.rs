@@ -53,7 +53,6 @@ pub struct InitInput {
 }
 
 /// Model contains the program's state as well as its core functions.
-#[async_trait::async_trait]
 pub trait Model: Sized {
     /// Init is the first function that will be called. It returns an optional
     /// initial command. To not perform an initial command return nil.
@@ -89,18 +88,26 @@ pub trait Model: Sized {
     /// # Example
     ///
     /// ```ignore
-    /// async fn execute(AsyncCmd(cmd): AsyncCmd) -> Option<Cmd> {
-    ///     let msg = cmd();
-    ///     if msg.downcast_ref::<AsyncMsg>().is_some() {
-    ///         tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
-    ///         return Some(Cmd::sync(Box::new(DoneMsg)));
+    /// fn execute(
+    ///     _ext: Extensions,
+    ///     AsyncCmd(cmd): AsyncCmd,
+    /// ) -> impl std::future::Future<Output = Option<Cmd>> + Send {
+    ///     async move {
+    ///         let msg = cmd();
+    ///         if msg.downcast_ref::<AsyncMsg>().is_some() {
+    ///             tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+    ///             return Some(Cmd::sync(Box::new(DoneMsg)));
+    ///         }
+    ///         None
     ///     }
-    ///     None
     /// }
     /// ```
     ///
-    async fn execute(_ext: Extensions, _cmd: AsyncCmd) -> Option<Cmd> {
-        None
+    fn execute(
+        _ext: Extensions,
+        _cmd: AsyncCmd,
+    ) -> impl std::future::Future<Output = Option<Cmd>> + Send {
+        async { None }
     }
 
     /// View renders the program's UI, which is just a string. The view is
@@ -620,7 +627,6 @@ mod tests {
         seen: String,
     }
 
-    #[async_trait::async_trait]
     impl Model for TestModel {
         fn update(mut self, msg: &Msg) -> (Self, Option<Cmd>) {
             if let Some(key) = msg.downcast_ref::<KeyEvent>() {

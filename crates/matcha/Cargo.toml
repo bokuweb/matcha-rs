@@ -12,7 +12,6 @@ name = "matcha"
 [dependencies]
 crossterm = { workspace = true, features = ["event-stream"] }
 tokio = { workspace = true, features = ["full"] }
-async-trait = { workspace = true }
 anyhow = { workspace = true }
 unicode-segmentation = { workspace = true }
 unicode-width = { workspace = true }

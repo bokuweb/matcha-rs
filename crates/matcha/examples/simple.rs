@@ -13,7 +13,6 @@ struct App {
     count: usize,
 }
 
-#[async_trait::async_trait]
 impl Model for App {
     fn init(self, _input: &InitInput) -> (Self, Option<Cmd>) {
         (self, Some(matcha::sync!(tick())))
