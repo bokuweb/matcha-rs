@@ -12,7 +12,6 @@ struct App {
     quitting: bool,
 }
 
-#[async_trait::async_trait]
 impl Model for App {
     fn init(self, _input: &InitInput) -> (Self, Option<Cmd>) {
         let cmd = self.spinner.tick(0);
