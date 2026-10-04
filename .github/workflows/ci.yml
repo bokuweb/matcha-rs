@@ -30,20 +30,22 @@ jobs:
           toolchain: 1.83.0
           components: rustfmt, clippy
 
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+      - name: Set up mbx cache
+        uses: jdx/mr-boxington-action@v1
+        with:
+          cache-key-suffix: ${{ github.job }}
 
       - name: Format (rustfmt)
         run: cargo fmt --all -- --check
 
       - name: Lint (clippy)
-        run: cargo clippy --workspace --exclude chagashi-fuzz --all-targets --all-features -- -D warnings
+        run: mbx clippy --workspace --exclude chagashi-fuzz --all-targets --all-features -- -D warnings
 
       - name: Build
-        run: cargo build --workspace --exclude chagashi-fuzz --all-features
+        run: mbx build --workspace --exclude chagashi-fuzz --all-features
 
       - name: Test
-        run: cargo test --workspace --exclude chagashi-fuzz --all-features
+        run: mbx test --workspace --exclude chagashi-fuzz --all-features
 
   property-tests:
     name: Property Tests (chagashi)
@@ -57,12 +59,14 @@ jobs:
         with:
           toolchain: 1.83.0
 
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+      - name: Set up mbx cache
+        uses: jdx/mr-boxington-action@v1
+        with:
+          cache-key-suffix: ${{ github.job }}
 
       - name: Run property-based tests
         env:
           PROPTEST_CASES: 256
           PROPTEST_FORK: false
-        run: cargo test -p chagashi -- --test-threads=1
+        run: mbx test -p chagashi -- --test-threads=1
 
